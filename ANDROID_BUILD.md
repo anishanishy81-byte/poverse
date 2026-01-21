@@ -1,25 +1,10 @@
 # Building PO-VERSE Android App
 
-## Quick Start (Development Mode)
-
-The app is pre-configured to connect to `http://192.168.0.6:3000`. This allows hot-reloading during development.
-
-### Step 1: Start the Dev Server
-```bash
-npm run dev
-```
-
-### Step 2: Download & Install APK
-1. On your Android phone, open Chrome and go to your landing page
-2. Click "Download App" button to download `poverse.apk`
-3. Install the APK (enable "Install from Unknown Sources" if prompted)
-4. Make sure your phone is on the same WiFi network as your computer
+This app runs as a **standalone offline-capable** application. The web assets are bundled directly into the APK.
 
 ---
 
-## Building a New APK
-
-### Prerequisites
+## Prerequisites
 
 1. **Install Android Studio** from https://developer.android.com/studio
 2. **Install JDK 17+** from https://adoptium.net/temurin/releases/
@@ -28,11 +13,15 @@ npm run dev
    - Android SDK Platform (API 34)
    - Android Virtual Device
 
+---
+
+## Building the APK
+
 ### Method 1: Using Android Studio (Recommended)
 
-1. **Sync Capacitor** (run from project root):
+1. **Build the web app and sync Capacitor** (run from project root):
    ```bash
-   npx cap sync android
+   npm run build:android
    ```
 
 2. **Open the Android project in Android Studio**:
@@ -48,59 +37,42 @@ npm run dev
    - Wait for the build to complete
    - Click "locate" in the notification to find the APK
 
-5. **Copy APK to public folder**:
-   ```powershell
-   copy android\app\build\outputs\apk\debug\app-debug.apk public\poverse.apk
+5. **APK Location**:
+   ```
+   android/app/build/outputs/apk/debug/app-debug.apk
    ```
 
 ### Method 2: Using Command Line
 
-1. **Sync and build**:
+1. **Build and sync**:
    ```bash
-   npx cap sync android
+   npm run build:android
    cd android
    .\gradlew assembleDebug
    ```
 
-2. **Copy the APK**:
-   ```bash
-   copy app\build\outputs\apk\debug\app-debug.apk ..\public\poverse.apk
+2. **Find the APK**:
+   ```
+   android/app/build/outputs/apk/debug/app-debug.apk
    ```
 
 ---
 
-## Configuration
+## Installing on Android Device
 
-### Changing Server URL
-
-Edit `capacitor.config.ts`:
-```typescript
-const SERVER_URL = 'http://YOUR_IP:3000';  // For development
-// const SERVER_URL = 'https://poverse.com';  // For production
-```
-
-Then sync:
-```bash
-npx cap sync android
-```
-
-### For Production Deployment
-
-1. Update `SERVER_URL` to your deployed domain
-2. Build a **Release APK** (signed) in Android Studio:
-   - Build → Generate Signed Bundle / APK
-   - Choose APK
-   - Create or use existing keystore
-3. Upload to Google Play Store or host for direct download
+1. Transfer the APK to your phone (USB, email, cloud storage, etc.)
+2. Open the APK file on your phone
+3. Enable "Install from Unknown Sources" if prompted
+4. Install and open the app
 
 ---
 
 ## Troubleshooting
 
-### App shows blank screen
-- Ensure the dev server is running (`npm run dev`)
-- Check your phone is on the same WiFi network
-- Verify the IP address in `capacitor.config.ts` matches your computer's IP
+### "App not installed" error
+- Make sure you have enough storage space
+- Uninstall any previous version of the app
+- Enable "Install from Unknown Sources"
 
 ### Location not working
 - Grant location permission when prompted
@@ -110,20 +82,11 @@ npx cap sync android
 - Enable "Install from Unknown Sources" in Android Settings
 - On Android 8+: Settings → Apps → Chrome → Install unknown apps → Allow
 
-You can also use Android Studio's built-in emulator or connect your phone via USB to test directly.
+---
 
-## Troubleshooting
+## Building a Release APK (For Distribution)
 
-### "App not installed" error
-- Make sure you have enough storage space
-- Uninstall any previous version of the app
-- Enable "Install from Unknown Sources"
-
-### Can't connect to server
-- Ensure the Next.js server is running
-- Ensure your phone is on the same WiFi network
-- Check the IP address in capacitor.config.ts matches your computer's IP
-
-### White screen
-- Check that the server URL is correct
-- Check your firewall allows connections on port 3000
+1. In Android Studio: Build → Generate Signed Bundle / APK
+2. Choose APK
+3. Create or use existing keystore
+4. Build the release APK

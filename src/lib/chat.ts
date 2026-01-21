@@ -1,25 +1,37 @@
-import { db } from "./firebase";
+import { db, realtimeDb } from "./firebase";
+import {
+  ref,
+  set,
+  push,
+  get,
+  update,
+  onValue,
+  query as rtdbQuery,
+  orderByChild,
+  onDisconnect,
+  off,
+  DataSnapshot,
+} from "firebase/database";
 import {
   collection,
-  doc,
-  addDoc,
-  updateDoc,
   query,
   where,
-  orderBy,
-  onSnapshot,
   getDocs,
-  serverTimestamp,
-  Timestamp,
-  getDoc,
-  setDoc,
-  writeBatch,
 } from "firebase/firestore";
 import { ChatMessage, Conversation, ChatUser } from "@/types/chat";
 
-const CONVERSATIONS_COLLECTION = "conversations";
-const MESSAGES_COLLECTION = "messages";
-const PRESENCE_COLLECTION = "presence";
+// Realtime Database paths
+const CONVERSATIONS_PATH = "conversations";
+const MESSAGES_PATH = "messages";
+const PRESENCE_PATH = "presence";
+const TYPING_PATH = "typing";
+
+// Export presence data type
+export interface PresenceData {
+  userId: string;
+  isOnline: boolean;
+  lastActive: string;
+}
 
 // Generate conversation ID from two user IDs (sorted to ensure consistency)
 export const getConversationId = (userId1: string, userId2: string): string => {
@@ -33,11 +45,12 @@ export const getOrCreateConversation = async (
   companyId?: string
 ): Promise<Conversation> => {
   const conversationId = getConversationId(user1.id, user2.id);
-  const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-  const conversationSnap = await getDoc(conversationRef);
-
-  if (conversationSnap.exists()) {
-    return { id: conversationSnap.id, ...conversationSnap.data() } as Conversation;
+  const conversationRef = ref(realtimeDb, `${CONVERSATIONS_PATH}/${conversationId}`);
+  
+  const snapshot = await get(conversationRef);
+  
+  if (snapshot.exists()) {
+    return { id: conversationId, ...snapshot.val() } as Conversation;
   }
 
   const newConversation: Omit<Conversation, "id"> = {
@@ -63,7 +76,7 @@ export const getOrCreateConversation = async (
     updatedAt: new Date().toISOString(),
   };
 
-  await setDoc(conversationRef, newConversation);
+  await set(conversationRef, newConversation);
   return { id: conversationId, ...newConversation };
 };
 
@@ -77,7 +90,8 @@ export const sendMessage = async (
   receiverName: string,
   content: string
 ): Promise<ChatMessage> => {
-  const messagesRef = collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_COLLECTION);
+  const messagesRef = ref(realtimeDb, `${MESSAGES_PATH}/${conversationId}`);
+  const newMessageRef = push(messagesRef);
   const timestamp = new Date().toISOString();
 
   const messageData = {
@@ -92,26 +106,26 @@ export const sendMessage = async (
     read: false,
   };
 
-  const docRef = await addDoc(messagesRef, messageData);
+  await set(newMessageRef, messageData);
 
   // Update conversation with last message
-  const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-  const conversationSnap = await getDoc(conversationRef);
+  const conversationRef = ref(realtimeDb, `${CONVERSATIONS_PATH}/${conversationId}`);
+  const conversationSnapshot = await get(conversationRef);
   
-  if (conversationSnap.exists()) {
-    const conversationData = conversationSnap.data();
+  if (conversationSnapshot.exists()) {
+    const conversationData = conversationSnapshot.val();
     const currentUnread = conversationData.unreadCount || {};
     
-    await updateDoc(conversationRef, {
+    await update(conversationRef, {
       lastMessage: content,
       lastMessageTime: timestamp,
       lastMessageSenderId: senderId,
       updatedAt: timestamp,
-      [`unreadCount.${receiverId}`]: (currentUnread[receiverId] || 0) + 1,
+      [`unreadCount/${receiverId}`]: (currentUnread[receiverId] || 0) + 1,
     });
   }
 
-  return { id: docRef.id, ...messageData };
+  return { id: newMessageRef.key!, ...messageData };
 };
 
 // Subscribe to messages in a conversation
@@ -119,16 +133,21 @@ export const subscribeToMessages = (
   conversationId: string,
   callback: (messages: ChatMessage[]) => void
 ) => {
-  const messagesRef = collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_COLLECTION);
-  const q = query(messagesRef, orderBy("timestamp", "asc"));
+  const messagesRef = ref(realtimeDb, `${MESSAGES_PATH}/${conversationId}`);
+  const messagesQuery = rtdbQuery(messagesRef, orderByChild("timestamp"));
 
-  return onSnapshot(q, (snapshot) => {
+  const unsubscribe = onValue(messagesQuery, (snapshot: DataSnapshot) => {
     const messages: ChatMessage[] = [];
-    snapshot.forEach((doc) => {
-      messages.push({ id: doc.id, ...doc.data() } as ChatMessage);
+    snapshot.forEach((childSnapshot) => {
+      messages.push({
+        id: childSnapshot.key!,
+        ...childSnapshot.val(),
+      } as ChatMessage);
     });
     callback(messages);
   });
+
+  return () => off(messagesRef);
 };
 
 // Subscribe to user's conversations
@@ -136,25 +155,33 @@ export const subscribeToConversations = (
   userId: string,
   callback: (conversations: Conversation[]) => void
 ) => {
-  const conversationsRef = collection(db, CONVERSATIONS_COLLECTION);
-  const q = query(
-    conversationsRef,
-    where("participants", "array-contains", userId)
-  );
+  const conversationsRef = ref(realtimeDb, CONVERSATIONS_PATH);
 
-  return onSnapshot(q, (snapshot) => {
+  const unsubscribe = onValue(conversationsRef, (snapshot: DataSnapshot) => {
     const conversations: Conversation[] = [];
-    snapshot.forEach((doc) => {
-      conversations.push({ id: doc.id, ...doc.data() } as Conversation);
+    
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
+      // Filter conversations that include this user
+      if (data.participants && data.participants.includes(userId)) {
+        conversations.push({
+          id: childSnapshot.key!,
+          ...data,
+        } as Conversation);
+      }
     });
+    
     // Sort by last message time
     conversations.sort((a, b) => {
       const timeA = a.lastMessageTime || a.createdAt;
       const timeB = b.lastMessageTime || b.createdAt;
       return new Date(timeB).getTime() - new Date(timeA).getTime();
     });
+    
     callback(conversations);
   });
+
+  return () => off(conversationsRef);
 };
 
 // Set typing status
@@ -163,10 +190,42 @@ export const setTypingStatus = async (
   userId: string,
   isTyping: boolean
 ) => {
-  const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-  await updateDoc(conversationRef, {
-    [`typing.${userId}`]: isTyping,
+  const typingRef = ref(realtimeDb, `${TYPING_PATH}/${conversationId}/${userId}`);
+  await set(typingRef, {
+    isTyping,
+    timestamp: new Date().toISOString(),
   });
+  
+  // Auto-remove typing status after 5 seconds of inactivity
+  if (isTyping) {
+    setTimeout(async () => {
+      await set(typingRef, {
+        isTyping: false,
+        timestamp: new Date().toISOString(),
+      });
+    }, 5000);
+  }
+};
+
+// Subscribe to typing status
+export const subscribeToTyping = (
+  conversationId: string,
+  callback: (typing: { [userId: string]: boolean }) => void
+) => {
+  const typingRef = ref(realtimeDb, `${TYPING_PATH}/${conversationId}`);
+
+  const unsubscribe = onValue(typingRef, (snapshot: DataSnapshot) => {
+    const typing: { [userId: string]: boolean } = {};
+    
+    snapshot.forEach((childSnapshot) => {
+      const data = childSnapshot.val();
+      typing[childSnapshot.key!] = data.isTyping || false;
+    });
+    
+    callback(typing);
+  });
+
+  return () => off(typingRef);
 };
 
 // Mark messages as read
@@ -174,60 +233,111 @@ export const markMessagesAsRead = async (
   conversationId: string,
   userId: string
 ) => {
-  const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
-  await updateDoc(conversationRef, {
-    [`unreadCount.${userId}`]: 0,
+  // Reset unread count for this user
+  const conversationRef = ref(realtimeDb, `${CONVERSATIONS_PATH}/${conversationId}`);
+  await update(conversationRef, {
+    [`unreadCount/${userId}`]: 0,
   });
 
-  // Also mark individual messages as read
-  const messagesRef = collection(db, CONVERSATIONS_COLLECTION, conversationId, MESSAGES_COLLECTION);
-  const q = query(messagesRef, where("receiverId", "==", userId), where("read", "==", false));
-  const snapshot = await getDocs(q);
-
-  const batch = writeBatch(db);
-  snapshot.forEach((doc) => {
-    batch.update(doc.ref, { read: true });
-  });
-  await batch.commit();
+  // Mark individual messages as read
+  const messagesRef = ref(realtimeDb, `${MESSAGES_PATH}/${conversationId}`);
+  const snapshot = await get(messagesRef);
+  
+  if (snapshot.exists()) {
+    const updates: { [key: string]: boolean } = {};
+    
+    snapshot.forEach((childSnapshot) => {
+      const message = childSnapshot.val();
+      if (message.receiverId === userId && !message.read) {
+        updates[`${MESSAGES_PATH}/${conversationId}/${childSnapshot.key}/read`] = true;
+      }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+      await update(ref(realtimeDb), updates);
+    }
+  }
 };
 
-// Update user presence
+// Update user presence (using Realtime Database for better real-time capabilities)
 export const updatePresence = async (userId: string, isOnline: boolean) => {
-  const presenceRef = doc(db, PRESENCE_COLLECTION, userId);
-  await setDoc(presenceRef, {
+  const presenceRef = ref(realtimeDb, `${PRESENCE_PATH}/${userId}`);
+  
+  await set(presenceRef, {
     userId,
     isOnline,
     lastActive: new Date().toISOString(),
-  }, { merge: true });
+  });
+
+  // Set up disconnect handler to mark user as offline when they disconnect
+  if (isOnline) {
+    const disconnectRef = onDisconnect(presenceRef);
+    await disconnectRef.set({
+      userId,
+      isOnline: false,
+      lastActive: new Date().toISOString(),
+    });
+  }
 };
 
 // Subscribe to user presence
 export const subscribeToPresence = (
-  userIds: string[],
+  userIds: string | string[],
   callback: (presence: { [userId: string]: { isOnline: boolean; lastActive: string } }) => void
 ) => {
-  if (userIds.length === 0) {
+  // Handle single user ID or array
+  const ids = Array.isArray(userIds) ? userIds : [userIds];
+  
+  if (ids.length === 0) {
     callback({});
     return () => {};
   }
 
-  const presenceRef = collection(db, PRESENCE_COLLECTION);
-  const q = query(presenceRef, where("userId", "in", userIds.slice(0, 10))); // Firestore limit
-
-  return onSnapshot(q, (snapshot) => {
+  const presenceRef = ref(realtimeDb, PRESENCE_PATH);
+  
+  const unsubscribe = onValue(presenceRef, (snapshot: DataSnapshot) => {
     const presence: { [userId: string]: { isOnline: boolean; lastActive: string } } = {};
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      presence[data.userId] = {
-        isOnline: data.isOnline,
-        lastActive: data.lastActive,
-      };
+    
+    snapshot.forEach((childSnapshot) => {
+      const oderId = childSnapshot.key!;
+      if (ids.includes(oderId)) {
+        const data = childSnapshot.val();
+        presence[oderId] = {
+          isOnline: data.isOnline || false,
+          lastActive: data.lastActive || new Date().toISOString(),
+        };
+      }
     });
+    
     callback(presence);
   });
+
+  return () => off(presenceRef);
 };
 
-// Get users that current user can chat with
+// Subscribe to single user presence (for admin maps)
+export const subscribeToSingleUserPresence = (
+  userId: string,
+  callback: (presence: PresenceData) => void
+): (() => void) => {
+  const presenceRef = ref(realtimeDb, `${PRESENCE_PATH}/${userId}`);
+  
+  onValue(presenceRef, (snapshot: DataSnapshot) => {
+    if (snapshot.exists()) {
+      callback(snapshot.val() as PresenceData);
+    } else {
+      callback({
+        userId,
+        isOnline: false,
+        lastActive: new Date().toISOString(),
+      });
+    }
+  });
+
+  return () => off(presenceRef);
+};
+
+// Get users that current user can chat with (still uses Firestore for user data)
 export const getChatableUsers = async (
   currentUser: ChatUser
 ): Promise<ChatUser[]> => {

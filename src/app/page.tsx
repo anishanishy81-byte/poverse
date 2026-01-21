@@ -32,7 +32,6 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import SupportAgentIcon from "@mui/icons-material/SupportAgent";
 import AndroidIcon from "@mui/icons-material/Android";
-import DownloadIcon from "@mui/icons-material/Download";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -429,34 +428,6 @@ export default function LandingPage() {
                     }}
                   >
                     Watch Demo
-                  </Button>
-                  <Button
-                    component="a"
-                    href="/poverse.apk"
-                    download
-                    variant="contained"
-                    size="large"
-                    startIcon={<AndroidIcon />}
-                    sx={{
-                      background: "linear-gradient(135deg, #3ddc84 0%, #00c853 100%)",
-                      color: "white",
-                      px: { xs: 3, md: 4 },
-                      py: { xs: 1.5, md: 2 },
-                      fontSize: { xs: "0.95rem", md: "1.1rem" },
-                      borderRadius: 3,
-                      fontWeight: 600,
-                      textTransform: "none",
-                      boxShadow: "0 8px 30px rgba(61,220,132,0.3)",
-                      width: { xs: "100%", sm: "auto" },
-                      "&:hover": {
-                        background: "linear-gradient(135deg, #00c853 0%, #00a846 100%)",
-                        transform: "translateY(-2px)",
-                        boxShadow: "0 12px 40px rgba(61,220,132,0.4)",
-                      },
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    Download App
                   </Button>
                 </Stack>
               </MotionBox>
@@ -1204,18 +1175,16 @@ export default function LandingPage() {
                       lineHeight: 1.7,
                     }}
                   >
-                    Download the PO-VERSE mobile app for your field agents. 
-                    Available for Android devices. Mark attendance, track locations, 
-                    view tasks, and stay connected — all from your smartphone.
+                    The PO-VERSE mobile app for field agents is coming soon! 
+                    Mark attendance, track locations, view tasks, and stay connected — 
+                    all from your smartphone.
                   </Typography>
                   <Stack spacing={2}>
                     <Box>
                       <Button
-                        component="a"
-                        href="/poverse.apk"
-                        download
                         variant="contained"
                         size="large"
+                        disabled
                         startIcon={<AndroidIcon sx={{ fontSize: 28 }} />}
                         sx={{
                           background: "linear-gradient(135deg, #3ddc84 0%, #00c853 100%)",
@@ -1227,15 +1196,13 @@ export default function LandingPage() {
                           fontWeight: 600,
                           textTransform: "none",
                           boxShadow: "0 8px 30px rgba(61,220,132,0.3)",
-                          "&:hover": {
-                            background: "linear-gradient(135deg, #00c853 0%, #00a846 100%)",
-                            transform: "translateY(-2px)",
-                            boxShadow: "0 12px 40px rgba(61,220,132,0.4)",
+                          "&.Mui-disabled": {
+                            background: "rgba(61,220,132,0.3)",
+                            color: "rgba(255,255,255,0.7)",
                           },
-                          transition: "all 0.3s ease",
                         }}
                       >
-                        Download for Android
+                        Coming Soon
                       </Button>
                     </Box>
                     <Typography 
@@ -1248,7 +1215,7 @@ export default function LandingPage() {
                       }}
                     >
                       <CheckCircleIcon sx={{ fontSize: 16, color: "#3ddc84" }} />
-                      Works on Android 7.0 and above
+                      Android app in development
                     </Typography>
                   </Stack>
                 </Grid>

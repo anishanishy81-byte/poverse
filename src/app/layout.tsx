@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { ThemeProvider } from "@/components";
+import { ThemeProvider, SessionGuard } from "@/components";
 
 export const metadata: Metadata = {
   title: {
@@ -115,6 +115,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  
   return (
     <html lang="en">
       <head>
@@ -125,9 +127,21 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {/* Google Maps API */}
+        {googleMapsApiKey && (
+          <script
+            src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places,geometry`}
+            async
+            defer
+          />
+        )}
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <SessionGuard>
+            {children}
+          </SessionGuard>
+        </ThemeProvider>
       </body>
     </html>
   );

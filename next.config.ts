@@ -17,11 +17,6 @@ const nextConfig: NextConfig = {
   },
   // Enable static export for Capacitor Android build
   output: process.env.BUILD_ANDROID === 'true' ? 'export' : undefined,
-  // Allow mobile devices on the same network to access dev server
-  allowedDevOrigins: [
-    "http://192.168.0.6",
-    "http://localhost",
-  ],
 };
 
 export default pwaConfig(nextConfig);

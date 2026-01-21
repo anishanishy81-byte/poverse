@@ -2,6 +2,12 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { User, UserRole, Company } from "@/types/auth";
 import { updatePresence } from "@/lib/chat";
+import { 
+  createSession, 
+  clearSession, 
+  validateSession, 
+  subscribeToSessionChanges 
+} from "@/lib/session";
 
 interface AppState {
   // Theme
@@ -12,9 +18,12 @@ interface AppState {
   isAuthenticated: boolean;
   user: User | null;
   company: Company | null;
+  sessionError: string | null;
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
-  logout: () => void;
+  logout: (silent?: boolean) => void;
   setCompany: (company: Company | null) => void;
+  setSessionError: (error: string | null) => void;
+  validateCurrentSession: () => Promise<boolean>;
   
   // UI State
   isSidebarOpen: boolean;
@@ -35,6 +44,7 @@ export const useAppStore = create<AppState>()(
         isAuthenticated: false,
         user: null,
         company: null,
+        sessionError: null,
         login: async (username: string, password: string) => {
           try {
             const response = await fetch("/api/auth/login", {
@@ -48,6 +58,9 @@ export const useAppStore = create<AppState>()(
             const data = await response.json();
 
             if (data.success && data.user) {
+              // Create a new session (this will invalidate any existing session)
+              await createSession(data.user.id);
+              
               // Set user as online immediately on login
               updatePresence(data.user.id, true);
               
@@ -55,6 +68,7 @@ export const useAppStore = create<AppState>()(
                 isAuthenticated: true,
                 user: data.user,
                 company: data.company || null,
+                sessionError: null,
               });
               return { success: true, user: data.user };
             }
@@ -65,15 +79,36 @@ export const useAppStore = create<AppState>()(
             return { success: false, error: "An error occurred during login" };
           }
         },
-        logout: () => {
+        logout: (silent = false) => {
           const user = get().user;
           if (user?.id) {
             // Set user as offline on logout
             updatePresence(user.id, false);
+            // Clear session only if not silent (silent = logged out by another device)
+            if (!silent) {
+              clearSession(user.id);
+            }
+          }
+          // Clear local session storage
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("sessionToken");
+            localStorage.removeItem("sessionUserId");
           }
           set({ isAuthenticated: false, user: null, company: null });
         },
         setCompany: (company) => set({ company }),
+        setSessionError: (error) => set({ sessionError: error }),
+        validateCurrentSession: async () => {
+          const user = get().user;
+          if (!user?.id) return false;
+          
+          const result = await validateSession(user.id);
+          if (!result.valid) {
+            set({ sessionError: result.reason || "Session invalid" });
+            return false;
+          }
+          return true;
+        },
 
         // UI State
         isSidebarOpen: true,

@@ -14,6 +14,10 @@ import {
   Badge,
   InputAdornment,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  Card,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SendIcon from "@mui/icons-material/Send";
@@ -29,6 +33,8 @@ import PersonIcon from "@mui/icons-material/Person";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import CloseIcon from "@mui/icons-material/Close";
 import { useAppStore, useCompany } from "@/store";
 import { ChatMessage, Conversation, ChatUser } from "@/types/chat";
 import {
@@ -37,11 +43,13 @@ import {
   subscribeToMessages,
   subscribeToConversations,
   setTypingStatus,
+  subscribeToTyping,
   markMessagesAsRead,
   subscribeToPresence,
   getChatableUsers,
   getConversationId,
 } from "@/lib/chat";
+import { subscribeToUserLocation, subscribeToAllLocations, LocationData } from "@/lib/locationTracking";
 
 const getRoleIcon = (role: string) => {
   switch (role) {
@@ -110,6 +118,14 @@ export default function ChatPage() {
   const [presence, setPresence] = useState<{ [userId: string]: { isOnline: boolean; lastActive: string } }>({});
   const [isSending, setIsSending] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<{ [userId: string]: boolean }>({});
+  const [selectedUserLocation, setSelectedUserLocation] = useState<LocationData | null>(null);
+  const [allUserLocations, setAllUserLocations] = useState<Map<string, LocationData>>(new Map());
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationMapLoaded, setLocationMapLoaded] = useState(false);
+  const locationMapRef = useRef<HTMLDivElement>(null);
+  const locationMapInstanceRef = useRef<google.maps.Map | null>(null);
+  const locationMarkerRef = useRef<google.maps.Marker | null>(null);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -172,9 +188,12 @@ export default function ChatPage() {
 
   // Subscribe to messages when conversation is selected
   useEffect(() => {
-    if (!selectedConversation) return;
+    if (!selectedConversation?.id) return;
 
+    console.log("Subscribing to messages for conversation:", selectedConversation.id);
+    
     const unsubscribe = subscribeToMessages(selectedConversation.id, (msgs) => {
+      console.log("Received messages:", msgs.length);
       setMessages(msgs);
     });
 
@@ -183,8 +202,143 @@ export default function ChatPage() {
       markMessagesAsRead(selectedConversation.id, user.id);
     }
 
+    return () => {
+      console.log("Unsubscribing from messages");
+      unsubscribe();
+    };
+  }, [selectedConversation?.id, user]);
+
+  // Subscribe to typing status for the selected conversation
+  useEffect(() => {
+    if (!selectedConversation?.id) {
+      setTypingUsers({});
+      return;
+    }
+
+    console.log("Subscribing to typing for conversation:", selectedConversation.id);
+    
+    const unsubscribe = subscribeToTyping(selectedConversation.id, (typing) => {
+      console.log("Typing status update:", typing);
+      setTypingUsers(typing);
+    });
+
+    return () => {
+      console.log("Unsubscribing from typing");
+      unsubscribe();
+    };
+  }, [selectedConversation?.id]);
+
+  // Subscribe to selected user's location for Snapchat-like map preview
+  useEffect(() => {
+    if (!selectedUser) {
+      setSelectedUserLocation(null);
+      return;
+    }
+
+    const unsubscribe = subscribeToUserLocation(selectedUser.id, (location) => {
+      setSelectedUserLocation(location);
+    });
+
     return () => unsubscribe();
-  }, [selectedConversation, user]);
+  }, [selectedUser]);
+
+  // Subscribe to all user locations for showing in conversation list
+  useEffect(() => {
+    if (!company?.id) return;
+
+    const unsubscribe = subscribeToAllLocations(company.id, (locations) => {
+      const locationMap = new Map<string, LocationData>();
+      locations.forEach((loc) => {
+        locationMap.set(loc.userId, loc);
+      });
+      setAllUserLocations(locationMap);
+    });
+
+    return () => unsubscribe();
+  }, [company?.id]);
+
+  // Initialize location map when modal opens
+  useEffect(() => {
+    if (!showLocationModal || !locationMapRef.current) return;
+    
+    // Reset map state when modal opens
+    locationMapInstanceRef.current = null;
+    locationMarkerRef.current = null;
+    setLocationMapLoaded(false);
+
+    const initMap = () => {
+      if (typeof window === "undefined" || !(window as any).google?.maps) {
+        return false;
+      }
+      
+      if (!locationMapRef.current) return false;
+
+      const center = selectedUserLocation
+        ? { lat: selectedUserLocation.latitude, lng: selectedUserLocation.longitude }
+        : { lat: 20.5937, lng: 78.9629 };
+
+      locationMapInstanceRef.current = new (window as any).google.maps.Map(locationMapRef.current, {
+        center,
+        zoom: 15,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+      
+      // Add marker immediately if we have location
+      if (selectedUserLocation && locationMapInstanceRef.current) {
+        const position = { lat: selectedUserLocation.latitude, lng: selectedUserLocation.longitude };
+        locationMarkerRef.current = new (window as any).google.maps.Marker({
+          map: locationMapInstanceRef.current,
+          position,
+          icon: {
+            url: `data:image/svg+xml,${encodeURIComponent(`
+              <svg xmlns="http://www.w3.org/2000/svg" width="50" height="60" viewBox="0 0 50 60">
+                <path d="M25 0C11.2 0 0 11.2 0 25c0 17.5 25 35 25 35s25-17.5 25-35C50 11.2 38.8 0 25 0z" fill="#0095f6"/>
+                <circle cx="25" cy="22" r="15" fill="white"/>
+                <text x="25" y="28" text-anchor="middle" font-size="18">📍</text>
+              </svg>
+            `)}`,
+            scaledSize: new (window as any).google.maps.Size(50, 60),
+            anchor: new (window as any).google.maps.Point(25, 60),
+          },
+          title: selectedUser?.name,
+        });
+      }
+
+      setLocationMapLoaded(true);
+      return true;
+    };
+
+    // Small delay to ensure DOM is ready
+    const timeout = setTimeout(() => {
+      if (!initMap()) {
+        const interval = setInterval(() => {
+          if (initMap()) {
+            clearInterval(interval);
+          }
+        }, 500);
+
+        // Clean up interval after 10 seconds
+        setTimeout(() => clearInterval(interval), 10000);
+      }
+    }, 100);
+
+    return () => clearTimeout(timeout);
+  }, [showLocationModal, selectedUserLocation, selectedUser?.name]);
+
+  // Update marker when location changes (only if map already exists)
+  useEffect(() => {
+    if (!locationMapInstanceRef.current || !selectedUserLocation || !showLocationModal) return;
+
+    const position = { lat: selectedUserLocation.latitude, lng: selectedUserLocation.longitude };
+
+    if (locationMarkerRef.current) {
+      locationMarkerRef.current.setPosition(position);
+    }
+
+    locationMapInstanceRef.current.panTo(position);
+  }, [selectedUserLocation, showLocationModal]);
 
   // Handle selecting a user to chat with
   const handleSelectUser = async (chatUser: ChatUser) => {
@@ -299,10 +453,8 @@ export default function ChatPage() {
       u.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Get other user's typing status
-  const isOtherUserTyping = selectedConversation && selectedUser
-    ? selectedConversation.typing?.[selectedUser.id]
-    : false;
+  // Get other user's typing status from realtime subscription
+  const isOtherUserTyping = selectedUser ? typingUsers[selectedUser.id] === true : false;
 
   // Get unread count for a conversation
   const getUnreadCount = (conversation: Conversation) => {
@@ -422,7 +574,9 @@ export default function ChatPage() {
             const unread = getUnreadCount(conv);
             const isSelected = selectedConversation?.id === conv.id;
             const userPresence = presence[otherUserId];
-            const isTyping = conv.typing?.[otherUserId];
+            // Use realtime typing state for selected conversation, fallback to conv.typing for others
+            const isTyping = isSelected ? typingUsers[otherUserId] : conv.typing?.[otherUserId];
+            const userLocation = allUserLocations.get(otherUserId);
 
             return (
               <Box
@@ -477,6 +631,23 @@ export default function ChatPage() {
                   >
                     {conv.participantNames[otherUserId]}
                   </Typography>
+                  {userLocation?.address && (
+                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.25 }}>
+                      <LocationOnIcon sx={{ fontSize: 10, color: "#0095f6" }} />
+                      <Typography
+                        sx={{
+                          color: "#0095f6",
+                          fontSize: 11,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: 180,
+                        }}
+                      >
+                        {userLocation.address}
+                      </Typography>
+                    </Stack>
+                  )}
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <Typography
                       sx={{
@@ -524,6 +695,7 @@ export default function ChatPage() {
               )}
               {usersWithoutConversation.map((chatUser) => {
                 const userPresence = presence[chatUser.id];
+                const userLocation = allUserLocations.get(chatUser.id);
 
                 return (
                   <Box
@@ -569,6 +741,23 @@ export default function ChatPage() {
                       <Typography sx={{ fontWeight: 400, fontSize: 14 }}>
                         {chatUser.name}
                       </Typography>
+                      {userLocation?.address && (
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.25 }}>
+                          <LocationOnIcon sx={{ fontSize: 10, color: "#0095f6" }} />
+                          <Typography
+                            sx={{
+                              color: "#0095f6",
+                              fontSize: 11,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 180,
+                            }}
+                          >
+                            {userLocation.address}
+                          </Typography>
+                        </Stack>
+                      )}
                       <Stack direction="row" spacing={0.5} alignItems="center">
                         <Chip
                           label={chatUser.role.toUpperCase()}
@@ -657,16 +846,36 @@ export default function ChatPage() {
                   <Typography sx={{ fontWeight: 600, fontSize: 16, lineHeight: 1.2 }}>
                     {selectedUser.name}
                   </Typography>
-                  <Typography sx={{ color: "#8e8e8e", fontSize: 12 }}>
-                    {presence[selectedUser.id]?.isOnline
-                      ? "Active now"
-                      : presence[selectedUser.id]?.lastActive
-                      ? formatLastActive(presence[selectedUser.id].lastActive)
-                      : "Offline"}
-                  </Typography>
+                  {selectedUserLocation?.address ? (
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      <LocationOnIcon sx={{ fontSize: 12, color: "#0095f6" }} />
+                      <Typography sx={{ color: "#0095f6", fontSize: 11, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {selectedUserLocation.address}
+                      </Typography>
+                    </Stack>
+                  ) : (
+                    <Typography sx={{ color: "#8e8e8e", fontSize: 12 }}>
+                      {presence[selectedUser.id]?.isOnline
+                        ? "Active now"
+                        : presence[selectedUser.id]?.lastActive
+                        ? formatLastActive(presence[selectedUser.id].lastActive)
+                        : "Offline"}
+                    </Typography>
+                  )}
                 </Box>
               </Stack>
               <Stack direction="row" spacing={1}>
+                <Tooltip title="View Location">
+                  <IconButton 
+                    onClick={() => setShowLocationModal(true)}
+                    disabled={!selectedUserLocation}
+                    sx={{ 
+                      color: selectedUserLocation ? "#0095f6" : "inherit",
+                    }}
+                  >
+                    <LocationOnIcon />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip title="Voice call">
                   <IconButton onClick={handleVoiceCall}>
                     <CallIcon />
@@ -950,6 +1159,131 @@ export default function ChatPage() {
           </Box>
         )}
       </Box>
+
+      {/* Location Modal - Snapchat Style */}
+      <Dialog
+        open={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, overflow: "hidden" }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: "linear-gradient(135deg, #0095f6 0%, #667eea 100%)",
+          color: "white",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Avatar
+              sx={{
+                bgcolor: getRoleColor(selectedUser?.role || "user"),
+              }}
+            >
+              {getRoleIcon(selectedUser?.role || "user")}
+            </Avatar>
+            <Box>
+              <Typography fontWeight={600}>{selectedUser?.name || "User"}&apos;s Location</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                {selectedUserLocation 
+                  ? `Last updated: ${new Date(selectedUserLocation.timestamp).toLocaleString()}`
+                  : "Location not available"}
+              </Typography>
+            </Box>
+          </Stack>
+          <IconButton onClick={() => setShowLocationModal(false)} sx={{ color: "white" }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: 400 }}>
+          {selectedUserLocation ? (
+            <>
+              <Box
+                ref={locationMapRef}
+                sx={{
+                  width: "100%",
+                  height: 300,
+                  bgcolor: "grey.200",
+                }}
+              />
+              {!locationMapLoaded && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translate(-50%, -50%)",
+                  }}
+                >
+                  <CircularProgress />
+                </Box>
+              )}
+              <Card sx={{ m: 2, p: 2 }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #0095f6 0%, #667eea 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <LocationOnIcon sx={{ color: "white" }} />
+                  </Box>
+                  <Box flex={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Current Location
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {selectedUserLocation.address || `${selectedUserLocation.latitude.toFixed(6)}, ${selectedUserLocation.longitude.toFixed(6)}`}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Accuracy: {selectedUserLocation.accuracy ? `±${Math.round(selectedUserLocation.accuracy)}m` : "Unknown"}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label="Get Directions"
+                    size="small"
+                    color="primary"
+                    onClick={() => {
+                      window.open(
+                        `https://www.google.com/maps/dir/?api=1&destination=${selectedUserLocation.latitude},${selectedUserLocation.longitude}`,
+                        "_blank"
+                      );
+                    }}
+                    sx={{ cursor: "pointer" }}
+                  />
+                </Stack>
+              </Card>
+            </>
+          ) : (
+            <Box
+              sx={{
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                p: 4,
+              }}
+            >
+              <LocationOnIcon sx={{ fontSize: 64, color: "grey.300", mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">
+                Location not available
+              </Typography>
+              <Typography color="text.secondary" textAlign="center">
+                This user hasn&apos;t shared their location yet
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { updatePresence } from "@/lib/chat";
+import { ref, set, onDisconnect, serverTimestamp } from "firebase/database";
+import { realtimeDb } from "@/lib/firebase";
 import { useAppStore } from "@/store";
+
+const PRESENCE_PATH = "presence";
 
 export function usePresence() {
   const { isAuthenticated, user } = useAppStore();
-  const presenceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const initializedRef = useRef(false);
+  const connectedRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
@@ -19,48 +22,68 @@ export function usePresence() {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    // Set user as online immediately
-    updatePresence(user.id, true);
-
-    // Update presence every 30 seconds to keep it alive
-    presenceIntervalRef.current = setInterval(() => {
-      updatePresence(user.id, true);
-    }, 30000);
+    const presenceRef = ref(realtimeDb, `${PRESENCE_PATH}/${user.id}`);
+    const connectedRefPath = ref(realtimeDb, ".info/connected");
+    
+    // Listen to connection state
+    const unsubscribe = import("firebase/database").then(({ onValue }) => {
+      return onValue(connectedRefPath, async (snapshot) => {
+        if (snapshot.val() === true) {
+          connectedRef.current = true;
+          
+          // Set up onDisconnect to mark user as offline when they disconnect
+          const disconnectRef = onDisconnect(presenceRef);
+          await disconnectRef.set({
+            isOnline: false,
+            lastActive: new Date().toISOString(),
+          });
+          
+          // Now set user as online
+          await set(presenceRef, {
+            isOnline: true,
+            lastActive: new Date().toISOString(),
+          });
+        }
+      });
+    });
 
     // Handle page visibility change
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        updatePresence(user.id, true);
+      if (document.visibilityState === "visible" && connectedRef.current) {
+        set(presenceRef, {
+          isOnline: true,
+          lastActive: new Date().toISOString(),
+        });
       }
-    };
-
-    // Handle before unload - set user as offline
-    const handleBeforeUnload = () => {
-      // Use sendBeacon for reliable offline status update
-      const data = JSON.stringify({ userId: user.id, isOnline: false });
-      navigator.sendBeacon("/api/presence", data);
     };
 
     // Handle window focus
     const handleFocus = () => {
-      updatePresence(user.id, true);
+      if (connectedRef.current) {
+        set(presenceRef, {
+          isOnline: true,
+          lastActive: new Date().toISOString(),
+        });
+      }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("focus", handleFocus);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("focus", handleFocus);
       
-      if (presenceIntervalRef.current) {
-        clearInterval(presenceIntervalRef.current);
-      }
-
       // Set offline when component unmounts (logout)
-      updatePresence(user.id, false);
+      if (connectedRef.current) {
+        set(presenceRef, {
+          isOnline: false,
+          lastActive: new Date().toISOString(),
+        });
+      }
+      
+      initializedRef.current = false;
+      connectedRef.current = false;
     };
   }, [isAuthenticated, user?.id]);
 }

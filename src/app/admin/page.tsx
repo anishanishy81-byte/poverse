@@ -48,6 +48,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import BusinessIcon from "@mui/icons-material/Business";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import ChatIcon from "@mui/icons-material/Chat";
+import MapIcon from "@mui/icons-material/Map";
+import FlagIcon from "@mui/icons-material/Flag";
 import { useAppStore, useIsAdmin, useIsSuperAdmin, useCompany } from "@/store";
 import { User, UserRole, Company } from "@/types/auth";
 import { countries, getStatesForCountry, getCitiesForState } from "@/lib/locationData";
@@ -397,6 +399,32 @@ export default function AdminDashboardPage() {
                   />
                 </Box>
               </Stack>
+              <Button
+                variant="contained"
+                startIcon={<MapIcon />}
+                onClick={() => router.push("/admin/maps")}
+                size="small"
+                sx={{
+                  bgcolor: "rgba(255,255,255,0.2)",
+                  color: "white",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
+                }}
+              >
+                Live Map
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<FlagIcon />}
+                onClick={() => router.push("/targets")}
+                size="small"
+                sx={{
+                  bgcolor: "rgba(255,255,255,0.2)",
+                  color: "white",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
+                }}
+              >
+                Targets
+              </Button>
               <Button
                 variant="contained"
                 startIcon={<ChatIcon />}

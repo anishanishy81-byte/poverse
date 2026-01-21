@@ -19,9 +19,11 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
+  ListItemButton,
   Divider,
   Alert,
   IconButton,
+  LinearProgress,
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
@@ -36,17 +38,49 @@ import BusinessIcon from "@mui/icons-material/Business";
 import PersonIcon from "@mui/icons-material/Person";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
+import SyncIcon from "@mui/icons-material/Sync";
+import AddLocationIcon from "@mui/icons-material/AddLocation";
+import DirectionsIcon from "@mui/icons-material/Directions";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import FlagIcon from "@mui/icons-material/Flag";
 import { useAppStore, useCompany } from "@/store";
 import { Company } from "@/types/auth";
-import { useGeolocation } from "@/hooks";
+import { useTrackedLocation } from "@/hooks";
 import { LocationMap, LocationPermissionDialog } from "@/components";
+import { TargetVisit } from "@/types/target";
+import {
+  subscribeToUserActiveVisits,
+  getTargetStatusInfo,
+  getLeadStatusInfo,
+  calculateDistance,
+} from "@/lib/targetTracking";
 
-// Sample stats for agent dashboard
-const agentStats = [
-  { title: "Tasks Today", value: "8", icon: <AssignmentIcon />, color: "#1976d2" },
-  { title: "Completed", value: "5", icon: <CheckCircleIcon />, color: "#2e7d32" },
-  { title: "Locations Visited", value: "12", icon: <LocationOnIcon />, color: "#ed6c02" },
-  { title: "Hours Active", value: "6.5", icon: <AccessTimeIcon />, color: "#9c27b0" },
+// Dynamic stats for agent dashboard - will be populated from real data
+const getAgentStats = (activeTargets: TargetVisit[], todayStats: { totalUpdates: number } | null) => [
+  { 
+    title: "Active Targets", 
+    value: activeTargets.length.toString(), 
+    icon: <FlagIcon />, 
+    color: "#1976d2" 
+  },
+  { 
+    title: "In Progress", 
+    value: activeTargets.filter(t => t.status === "in_progress").length.toString(), 
+    icon: <PlayArrowIcon />, 
+    color: "#9c27b0" 
+  },
+  { 
+    title: "Location Updates", 
+    value: todayStats?.totalUpdates?.toString() || "0", 
+    icon: <LocationOnIcon />, 
+    color: "#ed6c02" 
+  },
+  { 
+    title: "Pending", 
+    value: activeTargets.filter(t => t.status === "pending" || t.status === "in_transit").length.toString(), 
+    icon: <AccessTimeIcon />, 
+    color: "#2e7d32" 
+  },
 ];
 
 // Sample recent activities
@@ -73,8 +107,9 @@ export default function AgentDashboard() {
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [activeTargets, setActiveTargets] = useState<TargetVisit[]>([]);
 
-  // Geolocation hook
+  // Tracked Location hook - stores GPS data in Firebase Realtime Database
   const {
     latitude,
     longitude,
@@ -87,7 +122,46 @@ export default function AgentDashboard() {
     requestLocation,
     refreshLocation,
     isSupported,
-  } = useGeolocation({ watchPosition: true });
+    lastSyncTime,
+    isSyncing,
+    syncError,
+    todayStats,
+    locationHistory,
+    syncLocation,
+  } = useTrackedLocation({ 
+    userId: user?.id,
+    companyId: user?.companyId,
+    userName: user?.name,
+    enableTracking: true,
+    trackingInterval: 30000, // Sync every 30 seconds
+    watchPosition: true,
+  });
+
+  // Subscribe to active targets
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const unsubscribe = subscribeToUserActiveVisits(user.id, (visits) => {
+      setActiveTargets(visits);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id]);
+
+  // Helper to get distance to target
+  const getDistanceToTarget = (visit: TargetVisit): string => {
+    if (!latitude || !longitude) return "Unknown";
+    const distance = calculateDistance(
+      latitude,
+      longitude,
+      visit.location.latitude,
+      visit.location.longitude
+    );
+    if (distance < 1000) {
+      return `${Math.round(distance)}m`;
+    }
+    return `${(distance / 1000).toFixed(1)}km`;
+  };
 
   // Use stored company first
   useEffect(() => {
@@ -270,6 +344,19 @@ export default function AgentDashboard() {
               </Button>
               <Button
                 variant="contained"
+                startIcon={<LocationOnIcon />}
+                onClick={() => router.push("/targets")}
+                size="small"
+                sx={{
+                  bgcolor: "rgba(255,255,255,0.2)",
+                  color: "white",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
+                }}
+              >
+                Targets
+              </Button>
+              <Button
+                variant="contained"
                 startIcon={<AccountCircleIcon />}
                 onClick={() => router.push("/profile")}
                 size="small"
@@ -322,9 +409,167 @@ export default function AgentDashboard() {
           </Typography>
         </Paper>
 
+        {/* Active Targets Section - Prominent placement for agents */}
+        <Paper
+          sx={{
+            p: 3,
+            mb: 4,
+            borderRadius: 2,
+            background: "linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%)",
+            border: "2px solid",
+            borderColor: activeTargets.length > 0 ? "primary.main" : "grey.300",
+          }}
+        >
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <FlagIcon color="primary" />
+              <Typography variant="h6" fontWeight={600}>
+                My Targets
+              </Typography>
+              {activeTargets.length > 0 && (
+                <Chip
+                  label={`${activeTargets.length} Active`}
+                  size="small"
+                  color="primary"
+                />
+              )}
+            </Stack>
+            <Button
+              variant="contained"
+              startIcon={<AddLocationIcon />}
+              onClick={() => router.push("/targets")}
+              sx={{
+                background: "linear-gradient(135deg, #667eea 0%, #a855f7 100%)",
+              }}
+            >
+              Add New Target
+            </Button>
+          </Stack>
+
+          {activeTargets.length === 0 ? (
+            <Box
+              sx={{
+                textAlign: "center",
+                py: 4,
+                bgcolor: "white",
+                borderRadius: 2,
+              }}
+            >
+              <AddLocationIcon sx={{ fontSize: 48, color: "grey.400", mb: 1 }} />
+              <Typography variant="body1" color="text.secondary" gutterBottom>
+                No active targets assigned
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Search for a location to add it as your first target
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<AddLocationIcon />}
+                onClick={() => router.push("/targets")}
+              >
+                Search & Add Target
+              </Button>
+            </Box>
+          ) : (
+            <List sx={{ bgcolor: "white", borderRadius: 2, overflow: "hidden" }}>
+              {activeTargets.slice(0, 3).map((visit, index) => {
+                const statusInfo = getTargetStatusInfo(visit.status);
+                const isInProgress = visit.status === "in_progress";
+                
+                return (
+                  <ListItemButton
+                    key={visit.id}
+                    onClick={() => router.push("/targets")}
+                    sx={{
+                      borderBottom: index < Math.min(activeTargets.length, 3) - 1 ? 1 : 0,
+                      borderColor: "divider",
+                      bgcolor: isInProgress ? "primary.50" : "inherit",
+                    }}
+                  >
+                    <ListItemIcon>
+                      <Avatar
+                        sx={{
+                          bgcolor: statusInfo.color,
+                          width: 40,
+                          height: 40,
+                        }}
+                      >
+                        {visit.status === "in_transit" ? (
+                          <DirectionsIcon />
+                        ) : visit.status === "in_progress" ? (
+                          <PlayArrowIcon />
+                        ) : (
+                          <LocationOnIcon />
+                        )}
+                      </Avatar>
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography fontWeight={600}>
+                            {visit.targetName}
+                          </Typography>
+                          {isInProgress && (
+                            <Chip
+                              label="In Progress"
+                              size="small"
+                              color="primary"
+                              sx={{ animation: "pulse 2s infinite" }}
+                            />
+                          )}
+                        </Stack>
+                      }
+                      secondary={
+                        <Stack direction="row" spacing={1} alignItems="center" mt={0.5}>
+                          <Typography variant="caption" color="text.secondary">
+                            {visit.location.address?.substring(0, 40)}...
+                          </Typography>
+                          <Chip
+                            label={getDistanceToTarget(visit)}
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            sx={{ height: 20, fontSize: "0.7rem" }}
+                          />
+                        </Stack>
+                      }
+                    />
+                    <Stack alignItems="flex-end">
+                      <Chip
+                        label={statusInfo.label}
+                        size="small"
+                        sx={{
+                          bgcolor: statusInfo.color,
+                          color: "white",
+                          fontWeight: 600,
+                        }}
+                      />
+                      {visit.status === "in_transit" && (
+                        <Typography variant="caption" color="primary" sx={{ mt: 0.5 }}>
+                          Navigate →
+                        </Typography>
+                      )}
+                    </Stack>
+                  </ListItemButton>
+                );
+              })}
+              {activeTargets.length > 3 && (
+                <ListItemButton
+                  onClick={() => router.push("/targets")}
+                  sx={{ justifyContent: "center", bgcolor: "grey.50" }}
+                >
+                  <Typography variant="body2" color="primary" fontWeight={600}>
+                    View All {activeTargets.length} Targets →
+                  </Typography>
+                </ListItemButton>
+              )}
+            </List>
+          )}
+        </Paper>
+
         {/* Stats Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {agentStats.map((stat, index) => (
+          {getAgentStats(activeTargets, todayStats).map((stat, index) => (
             <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
               <Card
                 sx={{
@@ -513,6 +758,29 @@ export default function AgentDashboard() {
                   icon={<AccessTimeIcon />}
                   label={`Updated: ${new Date(timestamp).toLocaleTimeString()}`}
                   variant="outlined"
+                />
+              )}
+              {/* Sync Status */}
+              <Chip
+                icon={isSyncing ? <SyncIcon sx={{ animation: 'spin 1s linear infinite' }} /> : <SyncIcon />}
+                label={
+                  isSyncing 
+                    ? "Syncing..." 
+                    : lastSyncTime 
+                    ? `Synced: ${new Date(lastSyncTime).toLocaleTimeString()}`
+                    : "Not synced"
+                }
+                variant="outlined"
+                color={syncError ? "error" : lastSyncTime ? "success" : "default"}
+                onClick={syncLocation}
+                sx={{ cursor: 'pointer' }}
+              />
+              {todayStats && (
+                <Chip
+                  icon={<TrendingUpIcon />}
+                  label={`${todayStats.totalUpdates} updates today`}
+                  variant="outlined"
+                  color="info"
                 />
               )}
             </Stack>
