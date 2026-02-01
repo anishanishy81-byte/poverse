@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Profile pictures - anyone can read, authenticated users can write their own
+    match /profile-pictures/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Company logos - anyone can read, authenticated users can write
+    match /company-logos/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Document uploads
+    match /documents/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Expense receipts
+    match /expense-receipts/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Attendance selfies
+    match /attendance-selfies/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

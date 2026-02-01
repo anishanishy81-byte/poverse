@@ -19,6 +19,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { ChatMessage, Conversation, ChatUser } from "@/types/chat";
+import { notifyNewMessage } from "./notifications";
 
 // Realtime Database paths
 const CONVERSATIONS_PATH = "conversations";
@@ -123,6 +124,25 @@ export const sendMessage = async (
       updatedAt: timestamp,
       [`unreadCount/${receiverId}`]: (currentUnread[receiverId] || 0) + 1,
     });
+    
+    // Send push notification to receiver
+    try {
+      const companyId = conversationData.companyId;
+      if (companyId) {
+        await notifyNewMessage(
+          companyId,
+          receiverId,
+          senderId,
+          senderName,
+          undefined, // senderAvatar
+          content,
+          conversationId,
+          conversationData.title
+        );
+      }
+    } catch (error) {
+      console.error("Failed to send message notification:", error);
+    }
   }
 
   return { id: newMessageRef.key!, ...messageData };

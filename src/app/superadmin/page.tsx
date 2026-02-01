@@ -38,12 +38,19 @@ import {
   Tab,
   Fab,
   InputAdornment,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import BusinessIcon from "@mui/icons-material/Business";
 import PeopleIcon from "@mui/icons-material/People";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import PersonIcon from "@mui/icons-material/Person";
 import LogoutIcon from "@mui/icons-material/Logout";
+import MenuIcon from "@mui/icons-material/Menu";
+import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -81,6 +88,8 @@ export default function SuperAdminDashboardPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
   
   // Company Dialog
   const [openCompanyDialog, setOpenCompanyDialog] = useState(false);
@@ -136,6 +145,23 @@ export default function SuperAdminDashboardPage() {
       fetchUsers();
     }
   }, [isAuthenticated, isSuperAdmin]);
+
+  // Fetch user profile picture
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return;
+      try {
+        const response = await fetch(`/api/profile?userId=${user.id}`);
+        const data = await response.json();
+        if (data.success && data.user?.profilePicture) {
+          setUserProfilePicture(data.user.profilePicture);
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      }
+    };
+    fetchUserProfile();
+  }, [user]);
 
   const fetchCompanies = async () => {
     if (!user) return;
@@ -463,79 +489,223 @@ export default function SuperAdminDashboardPage() {
     { title: "Total Agents", value: users.filter((u) => u.role === "user").length, icon: <PeopleIcon />, color: "#10b981" },
   ];
 
+  // SuperAdmin navigation items
+  const superadminNavItems = [
+    { label: "Chat", icon: <ChatIcon />, path: "/chat" },
+    { label: "Profile", icon: <AccountCircleIcon />, path: "/profile" },
+  ];
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f5f5f5" }}>
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: 280,
+            background: "linear-gradient(180deg, #667eea 0%, #764ba2 100%)",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {userProfilePicture ? (
+                <Avatar
+                  src={userProfilePicture}
+                  alt={user?.name}
+                  sx={{ width: 40, height: 40 }}
+                />
+              ) : (
+                <Avatar sx={{ width: 40, height: 40, bgcolor: "rgba(255,255,255,0.2)" }}>
+                  <AdminPanelSettingsIcon />
+                </Avatar>
+              )}
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "white" }}>
+                  {user?.name}
+                </Typography>
+                <Chip
+                  label="SUPERADMIN"
+                  size="small"
+                  sx={{ height: 18, fontSize: "0.6rem", bgcolor: "#ef4444", color: "white" }}
+                />
+              </Box>
+            </Stack>
+            <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "white" }}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", mb: 1 }} />
+        </Box>
+        <List sx={{ px: 1 }}>
+          {superadminNavItems.map((item) => (
+            <ListItemButton
+              key={item.path}
+              onClick={() => {
+                router.push(item.path);
+                setMobileMenuOpen(false);
+              }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                color: "white",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.15)",
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          ))}
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", my: 1 }} />
+          <ListItemButton
+            onClick={handleLogout}
+            sx={{
+              borderRadius: 2,
+              color: "#ff8a80",
+              "&:hover": {
+                bgcolor: "rgba(255,138,128,0.15)",
+              },
+            }}
+          >
+            <ListItemIcon sx={{ color: "#ff8a80", minWidth: 40 }}>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItemButton>
+        </List>
+      </Drawer>
+
       {/* Header */}
       <Box
         sx={{
           background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          py: 2,
-          px: 3,
+          py: 1.5,
+          px: { xs: 2, md: 3 },
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
         }}
       >
         <Container maxWidth="xl">
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Image src="/logo.png" alt="Logo" width={40} height={40} style={{ borderRadius: 8 }} />
-              <Typography variant="h5" fontWeight={700} sx={{ color: "white" }}>
+            {/* Left: Menu + Logo */}
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {/* Mobile Menu Button */}
+              <IconButton
+                onClick={() => setMobileMenuOpen(true)}
+                sx={{ color: "white", display: { xs: "flex", sm: "none" } }}
+              >
+                <MenuIcon />
+              </IconButton>
+              
+              <Image src="/logo.png" alt="Logo" width={36} height={36} style={{ borderRadius: 8 }} />
+              <Typography 
+                variant="h6" 
+                fontWeight={700} 
+                sx={{ color: "white", display: { xs: "none", sm: "block" } }}
+              >
                 PO-VERSE SuperAdmin
               </Typography>
             </Stack>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Avatar sx={{ width: 36, height: 36, bgcolor: "rgba(255,255,255,0.2)" }}>
-                  <AdminPanelSettingsIcon />
-                </Avatar>
+
+            {/* Right: User + Actions */}
+            <Stack direction="row" spacing={1} alignItems="center">
+              {/* User info - tablet+ */}
+              <Stack 
+                direction="row" 
+                spacing={1} 
+                alignItems="center" 
+                sx={{ 
+                  display: { xs: "none", sm: "flex" },
+                  bgcolor: "rgba(255,255,255,0.1)",
+                  borderRadius: 2,
+                  px: 1.5,
+                  py: 0.5,
+                }}
+              >
+                {userProfilePicture ? (
+                  <Avatar 
+                    src={userProfilePicture}
+                    alt={user?.name}
+                    sx={{ width: 28, height: 28 }}
+                  />
+                ) : (
+                  <Avatar sx={{ width: 28, height: 28, bgcolor: "rgba(255,255,255,0.2)" }}>
+                    <AdminPanelSettingsIcon sx={{ fontSize: 18 }} />
+                  </Avatar>
+                )}
                 <Box>
-                  <Typography fontWeight={500} sx={{ color: "white", fontSize: "0.9rem" }}>
+                  <Typography fontWeight={500} sx={{ color: "white", fontSize: "0.8rem", lineHeight: 1.2 }}>
                     {user?.name}
                   </Typography>
                   <Chip
                     label="SUPERADMIN"
                     size="small"
-                    sx={{ height: 18, fontSize: "0.6rem", bgcolor: "#ef4444", color: "white" }}
+                    sx={{ height: 16, fontSize: "0.55rem", bgcolor: "#ef4444", color: "white" }}
                   />
                 </Box>
               </Stack>
-              <Button
-                variant="contained"
-                startIcon={<ChatIcon />}
-                onClick={() => router.push("/chat")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
+
+              {/* Quick Actions - tablet+ */}
+              <Stack 
+                direction="row" 
+                spacing={0.5} 
+                sx={{ display: { xs: "none", sm: "flex" } }}
               >
-                Chat
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AccountCircleIcon />}
-                onClick={() => router.push("/profile")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Profile
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<LogoutIcon />}
-                onClick={handleLogout}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Logout
-              </Button>
+                <Tooltip title="Chat">
+                  <IconButton
+                    onClick={() => router.push("/chat")}
+                    size="small"
+                    sx={{
+                      color: "white",
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                    }}
+                  >
+                    <ChatIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Profile">
+                  <IconButton
+                    onClick={() => router.push("/profile")}
+                    size="small"
+                    sx={{
+                      color: "white",
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                      p: userProfilePicture ? 0.5 : 1,
+                    }}
+                  >
+                    {userProfilePicture ? (
+                      <Avatar 
+                        src={userProfilePicture}
+                        alt={user?.name}
+                        sx={{ width: 24, height: 24 }}
+                      />
+                    ) : (
+                      <AccountCircleIcon />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              
+              {/* Logout */}
+              <Tooltip title="Logout">
+                <IconButton
+                  onClick={handleLogout}
+                  sx={{ color: "white" }}
+                  size="small"
+                >
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
             </Stack>
           </Stack>
         </Container>

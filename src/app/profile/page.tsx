@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Container,
@@ -19,6 +19,8 @@ import {
   IconButton,
   Autocomplete,
   CircularProgress,
+  Badge,
+  Tooltip,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PersonIcon from "@mui/icons-material/Person";
@@ -26,6 +28,8 @@ import LockIcon from "@mui/icons-material/Lock";
 import SaveIcon from "@mui/icons-material/Save";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import CameraAltIcon from "@mui/icons-material/CameraAlt";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useAppStore, useCompany } from "@/store";
 import { User, UserRole } from "@/types/auth";
 import { countries, getStatesForCountry, getCitiesForState } from "@/lib/locationData";
@@ -56,10 +60,12 @@ export default function ProfilePage() {
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAppStore();
   const company = useCompany();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
 
   // Profile form
   const [profileData, setProfileData] = useState({
@@ -70,6 +76,8 @@ export default function ProfilePage() {
     state: "",
     country: "",
   });
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [newProfilePicture, setNewProfilePicture] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
@@ -116,6 +124,7 @@ export default function ProfilePage() {
           state: data.user.state || "",
           country: data.user.country || "",
         });
+        setProfilePicture(data.user.profilePicture || null);
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
@@ -143,17 +152,33 @@ export default function ProfilePage() {
 
     setIsSaving(true);
     try {
+      const requestBody: Record<string, string | null> = { ...profileData };
+      
+      // Include new profile picture if selected
+      if (newProfilePicture) {
+        requestBody.profilePicture = newProfilePicture;
+      }
+
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "x-user-id": user.id,
         },
-        body: JSON.stringify(profileData),
+        body: JSON.stringify(requestBody),
       });
       const data = await response.json();
       if (data.success) {
         setProfileSuccess("Profile updated successfully!");
+        // Update profile picture from response or refetch
+        if (data.profilePicture) {
+          setProfilePicture(data.profilePicture);
+        } else if (data.user?.profilePicture) {
+          setProfilePicture(data.user.profilePicture);
+        }
+        setNewProfilePicture(null);
+        // Refetch profile to ensure we have latest data
+        await fetchProfile();
         setTimeout(() => setProfileSuccess(null), 3000);
       } else {
         setProfileError(data.error || "Failed to update profile");
@@ -163,6 +188,41 @@ export default function ProfilePage() {
       setProfileError("An error occurred");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleProfilePictureChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      setProfileError("Please select an image file");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError("Image size should be less than 5MB");
+      return;
+    }
+
+    // Read file as base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewProfilePicture(reader.result as string);
+      setProfileError(null);
+    };
+    reader.onerror = () => {
+      setProfileError("Failed to read image file");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveProfilePicture = () => {
+    setNewProfilePicture(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -272,18 +332,69 @@ export default function ProfilePage() {
             {/* User Info Card */}
             <Card>
               <CardContent>
-                <Stack direction="row" spacing={3} alignItems="center">
-                  <Avatar
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      bgcolor: "primary.main",
-                      fontSize: "2rem",
-                    }}
-                  >
-                    {profileData.name?.charAt(0)?.toUpperCase() || "U"}
-                  </Avatar>
-                  <Box>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={3} alignItems={{ xs: "center", sm: "flex-start" }}>
+                  {/* Profile Picture with Upload */}
+                  <Box sx={{ position: "relative" }}>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleProfilePictureChange}
+                      accept="image/*"
+                      style={{ display: "none" }}
+                    />
+                    <Badge
+                      overlap="circular"
+                      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                      badgeContent={
+                        <Tooltip title="Change profile picture">
+                          <IconButton
+                            onClick={() => fileInputRef.current?.click()}
+                            sx={{
+                              bgcolor: "primary.main",
+                              color: "white",
+                              width: 32,
+                              height: 32,
+                              "&:hover": { bgcolor: "primary.dark" },
+                            }}
+                          >
+                            <CameraAltIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
+                      }
+                    >
+                      <Avatar
+                        src={newProfilePicture || profilePicture || undefined}
+                        sx={{
+                          width: 100,
+                          height: 100,
+                          bgcolor: "primary.main",
+                          fontSize: "2.5rem",
+                          border: "4px solid",
+                          borderColor: "primary.light",
+                        }}
+                      >
+                        {!newProfilePicture && !profilePicture && (profileData.name?.charAt(0)?.toUpperCase() || "U")}
+                      </Avatar>
+                    </Badge>
+                    {newProfilePicture && (
+                      <Box sx={{ mt: 1, textAlign: "center" }}>
+                        <Tooltip title="Remove selected image">
+                          <IconButton
+                            size="small"
+                            onClick={handleRemoveProfilePicture}
+                            sx={{ color: "error.main" }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          New photo selected
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                  
+                  <Box sx={{ textAlign: { xs: "center", sm: "left" } }}>
                     <Typography variant="h5" fontWeight={600}>
                       {profileData.name || user?.name}
                     </Typography>
@@ -295,6 +406,11 @@ export default function ProfilePage() {
                       color={getRoleColor(user?.role || "user")}
                       size="small"
                     />
+                    {company && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {company.name}
+                      </Typography>
+                    )}
                   </Box>
                 </Stack>
               </CardContent>

@@ -30,6 +30,7 @@ import {
 import LogoutIcon from "@mui/icons-material/Logout";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import ChatIcon from "@mui/icons-material/Chat";
+import MenuIcon from "@mui/icons-material/Menu";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -53,8 +54,11 @@ import LocalAtmIcon from "@mui/icons-material/LocalAtm";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import SpeedIcon from "@mui/icons-material/Speed";
 import WhatshotIcon from "@mui/icons-material/Whatshot";
+import EventNoteIcon from "@mui/icons-material/EventNote";
+import ReceiptIcon from "@mui/icons-material/Receipt";
 import StarIcon from "@mui/icons-material/Star";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import AssignmentIcon from "@mui/icons-material/Assignment";
@@ -62,6 +66,8 @@ import { useAppStore, useCompany } from "@/store";
 import { Company } from "@/types/auth";
 import { useTrackedLocation } from "@/hooks";
 import { LocationMap, LocationPermissionDialog } from "@/components";
+import NotificationCenter from "@/components/NotificationCenter";
+import { OfflineIndicator, OfflineBanner } from "@/components/OfflineIndicator";
 import { TargetVisit } from "@/types/target";
 import { AttendanceRecord } from "@/types/attendance";
 import {
@@ -117,6 +123,8 @@ export default function AgentDashboard() {
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
 
   // Tracked Location hook
   const {
@@ -147,6 +155,25 @@ export default function AgentDashboard() {
   const dashboardStats = calculateDashboardStats(activeTargets, todayAttendance, locationHistory || [], allVisits);
   const earningsSummary = calculateEarningsSummary(incentives, "monthly");
   const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+
+  // Fetch user profile picture
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+      try {
+        const response = await fetch("/api/profile", {
+          headers: { "x-user-id": user.id },
+        });
+        const data = await response.json();
+        if (data.success && data.user?.profilePicture) {
+          setUserProfilePicture(data.user.profilePicture);
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+      }
+    };
+    fetchUserProfile();
+  }, [user?.id]);
 
   // Subscribe to active targets
   useEffect(() => {
@@ -349,156 +376,265 @@ export default function AgentDashboard() {
     return null;
   }
 
+  // Navigation menu items
+  const navItems = [
+    { label: "Chat", icon: <ChatIcon />, path: "/chat" },
+    { label: "Attendance", icon: <AccessTimeIcon />, path: "/attendance" },
+    { label: "Leave", icon: <EventNoteIcon />, path: "/leave" },
+    { label: "Expenses", icon: <ReceiptIcon />, path: "/expenses" },
+    { label: "Documents", icon: <AssignmentIcon />, path: "/documents" },
+    { label: "Reports", icon: <AssessmentIcon />, path: "/reports" },
+    { label: "Targets", icon: <LocationOnIcon />, path: "/targets" },
+    { label: "Routes", icon: <DirectionsIcon />, path: "/routes" },
+    { label: "Customers", icon: <PeopleAltIcon />, path: "/crm" },
+    { label: "Profile", icon: <AccountCircleIcon />, path: "/profile" },
+  ];
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f5f5f5" }}>
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: 280,
+            background: "linear-gradient(180deg, #667eea 0%, #a855f7 100%)",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {userProfilePicture ? (
+                <Avatar
+                  src={userProfilePicture}
+                  alt={user?.name}
+                  sx={{ width: 40, height: 40 }}
+                />
+              ) : (
+                <Avatar sx={{ width: 40, height: 40, bgcolor: "rgba(255,255,255,0.2)" }}>
+                  {user?.name?.charAt(0)?.toUpperCase() || <PersonIcon />}
+                </Avatar>
+              )}
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "white" }}>
+                  {user?.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)" }}>
+                  {company?.name}
+                </Typography>
+              </Box>
+            </Stack>
+            <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "white" }}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", mb: 1 }} />
+        </Box>
+        <List sx={{ px: 1 }}>
+          {navItems.map((item) => (
+            <ListItemButton
+              key={item.path}
+              onClick={() => {
+                router.push(item.path);
+                setMobileMenuOpen(false);
+              }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                color: "white",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.15)",
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          ))}
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", my: 1 }} />
+          <ListItemButton
+            onClick={handleLogout}
+            sx={{
+              borderRadius: 2,
+              color: "#ff8a80",
+              "&:hover": {
+                bgcolor: "rgba(255,138,128,0.15)",
+              },
+            }}
+          >
+            <ListItemIcon sx={{ color: "#ff8a80", minWidth: 40 }}>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItemButton>
+        </List>
+      </Drawer>
+
       {/* Header */}
       <Box
         sx={{
           background: "linear-gradient(135deg, #667eea 0%, #a855f7 100%)",
-          py: 2,
-          px: 3,
+          py: 1.5,
+          px: { xs: 2, md: 3 },
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
         }}
       >
         <Container maxWidth="lg">
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={2} alignItems="center">
+            {/* Left: Menu + Logo */}
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {/* Mobile Menu Button */}
+              <IconButton
+                onClick={() => setMobileMenuOpen(true)}
+                sx={{ color: "white", display: { xs: "flex", md: "none" } }}
+              >
+                <MenuIcon />
+              </IconButton>
+              
               {company?.logoUrl ? (
                 <Avatar
                   src={company.logoUrl}
                   alt={company.name}
-                  sx={{ width: 48, height: 48, bgcolor: "white" }}
+                  sx={{ width: { xs: 36, md: 44 }, height: { xs: 36, md: 44 }, bgcolor: "white" }}
                 />
               ) : (
-                <Avatar sx={{ width: 48, height: 48, bgcolor: "rgba(255,255,255,0.2)" }}>
+                <Avatar sx={{ width: { xs: 36, md: 44 }, height: { xs: 36, md: 44 }, bgcolor: "rgba(255,255,255,0.2)" }}>
                   <BusinessIcon />
                 </Avatar>
               )}
-              <Box>
-                <Typography variant="h5" fontWeight={700} sx={{ color: "white" }}>
+              <Box sx={{ display: { xs: "none", sm: "block" } }}>
+                <Typography variant="h6" fontWeight={700} sx={{ color: "white", lineHeight: 1.2 }}>
                   {company?.name || "Agent Dashboard"}
                 </Typography>
-                <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.8)" }}>
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.8)" }}>
                   Field Marketing Agent Portal
                 </Typography>
               </Box>
             </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: 2 }}>
-                <Avatar sx={{ width: 36, height: 36, bgcolor: "rgba(255,255,255,0.2)" }}>
-                  <PersonIcon fontSize="small" />
-                </Avatar>
-                <Box sx={{ display: { xs: "none", md: "block" } }}>
-                  <Typography fontWeight={500} sx={{ color: "white", fontSize: "0.85rem" }}>
-                    {user?.name}
-                  </Typography>
-                </Box>
+
+            {/* Desktop Navigation */}
+            <Stack 
+              direction="row" 
+              spacing={0.5} 
+              alignItems="center"
+              sx={{ display: { xs: "none", md: "flex" } }}
+            >
+              {navItems.slice(0, 6).map((item) => (
+                <Tooltip key={item.path} title={item.label}>
+                  <IconButton
+                    onClick={() => router.push(item.path)}
+                    size="small"
+                    sx={{
+                      color: "white",
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                    }}
+                  >
+                    {item.icon}
+                  </IconButton>
+                </Tooltip>
+              ))}
+            </Stack>
+
+            {/* Right: User Actions */}
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              {/* User info - desktop only */}
+              <Stack 
+                direction="row" 
+                spacing={1} 
+                alignItems="center" 
+                sx={{ 
+                  mr: 1,
+                  display: { xs: "none", lg: "flex" },
+                  bgcolor: "rgba(255,255,255,0.1)",
+                  borderRadius: 2,
+                  px: 1.5,
+                  py: 0.5,
+                }}
+              >
+                {userProfilePicture ? (
+                  <Avatar src={userProfilePicture} sx={{ width: 28, height: 28 }} />
+                ) : (
+                  <Avatar sx={{ width: 28, height: 28, bgcolor: "rgba(255,255,255,0.2)", fontSize: "0.8rem" }}>
+                    {user?.name?.charAt(0)?.toUpperCase() || <PersonIcon sx={{ fontSize: 18 }} />}
+                  </Avatar>
+                )}
+                <Typography fontWeight={500} sx={{ color: "white", fontSize: "0.85rem" }}>
+                  {user?.name}
+                </Typography>
               </Stack>
-              
+
               {/* Notification Bell */}
               <IconButton
                 onClick={() => setNotificationDrawerOpen(true)}
                 sx={{ color: "white" }}
+                size="small"
               >
                 <Badge badgeContent={unreadNotifications} color="error">
                   <NotificationsIcon />
                 </Badge>
               </IconButton>
               
-              <Button
-                variant="contained"
-                startIcon={<ChatIcon />}
-                onClick={() => router.push("/chat")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                  display: { xs: "none", sm: "flex" },
-                }}
+              <NotificationCenter iconColor="white" />
+              
+              {user?.id && user?.companyId && (
+                <OfflineIndicator userId={user.id} companyId={user.companyId} />
+              )}
+
+              {/* Quick Actions - visible on tablet+ */}
+              <Stack 
+                direction="row" 
+                spacing={0.5} 
+                sx={{ display: { xs: "none", sm: "flex", md: "none" } }}
               >
-                Chat
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AccessTimeIcon />}
-                onClick={() => router.push("/attendance")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                  display: { xs: "none", sm: "flex" },
-                }}
-              >
-                Attendance
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AssessmentIcon />}
-                onClick={() => router.push("/reports")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                  display: { xs: "none", md: "flex" },
-                }}
-              >
-                Reports
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<LocationOnIcon />}
-                onClick={() => router.push("/targets")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Targets
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<DirectionsIcon />}
-                onClick={() => router.push("/routes")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                  display: { xs: "none", sm: "flex" },
-                }}
-              >
-                Routes
-              </Button>
-              <IconButton
-                onClick={() => router.push("/profile")}
-                sx={{ color: "white", display: { xs: "flex", sm: "none" } }}
-              >
-                <AccountCircleIcon />
-              </IconButton>
-              <Button
-                variant="contained"
-                startIcon={<AccountCircleIcon />}
-                onClick={() => router.push("/profile")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                  display: { xs: "none", sm: "flex" },
-                }}
-              >
-                Profile
-              </Button>
-              <IconButton
-                onClick={handleLogout}
-                sx={{ color: "white" }}
-              >
-                <LogoutIcon />
-              </IconButton>
+                <Tooltip title="Targets">
+                  <IconButton
+                    onClick={() => router.push("/targets")}
+                    size="small"
+                    sx={{ color: "white" }}
+                  >
+                    <LocationOnIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Chat">
+                  <IconButton
+                    onClick={() => router.push("/chat")}
+                    size="small"
+                    sx={{ color: "white" }}
+                  >
+                    <ChatIcon />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+
+              {/* Profile Button */}
+              <Tooltip title="Profile">
+                <IconButton
+                  onClick={() => router.push("/profile")}
+                  sx={{ color: "white" }}
+                  size="small"
+                >
+                  <AccountCircleIcon />
+                </IconButton>
+              </Tooltip>
+              
+              {/* Logout - always visible */}
+              <Tooltip title="Logout">
+                <IconButton
+                  onClick={handleLogout}
+                  sx={{ color: "white" }}
+                  size="small"
+                >
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
             </Stack>
           </Stack>
         </Container>

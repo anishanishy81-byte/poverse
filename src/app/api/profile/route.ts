@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserByUsername, updateUser, verifyPassword, hashPassword } from "@/lib/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { uploadProfilePicture, deleteProfilePicture } from "@/lib/storage";
 
 const USERS_COLLECTION = "users";
 
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
         companyId: userData.companyId,
         createdAt: userData.createdAt,
         isActive: userData.isActive,
+        profilePicture: userData.profilePicture || null,
       },
     });
   } catch (error) {
@@ -68,7 +70,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, email, phone, city, state, country } = body;
+    const { name, email, phone, city, state, country, profilePicture } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -77,14 +79,35 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const result = await updateUser(userId, {
+    // Handle profile picture upload if provided
+    let profilePictureUrl: string | undefined;
+    if (profilePicture && profilePicture.startsWith("data:image")) {
+      const uploadResult = await uploadProfilePicture(userId, profilePicture);
+      if (uploadResult.success && uploadResult.url) {
+        profilePictureUrl = uploadResult.url;
+      } else {
+        return NextResponse.json(
+          { success: false, error: uploadResult.error || "Failed to upload profile picture" },
+          { status: 400 }
+        );
+      }
+    }
+
+    const updateData: Record<string, string | undefined> = {
       name,
       email,
       phone,
       city,
       state,
       country,
-    });
+    };
+
+    // Only add profilePicture to update if it was uploaded
+    if (profilePictureUrl) {
+      updateData.profilePicture = profilePictureUrl;
+    }
+
+    const result = await updateUser(userId, updateData);
 
     if (!result.success) {
       return NextResponse.json(
@@ -93,7 +116,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, user: result.user });
+    return NextResponse.json({ 
+      success: true, 
+      user: result.user,
+      profilePicture: profilePictureUrl || result.user?.profilePicture 
+    });
   } catch (error) {
     console.error("Update profile error:", error);
     return NextResponse.json(

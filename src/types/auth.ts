@@ -12,6 +12,7 @@ export interface User {
   country?: string;
   companyId?: string;
   companyName?: string;
+  profilePicture?: string;
   createdAt: string;
   createdBy?: string;
   isActive: boolean;

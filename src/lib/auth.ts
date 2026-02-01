@@ -225,13 +225,35 @@ export async function updateUser(
     if (updates.companyId !== undefined) updateData.companyId = updates.companyId;
     if (updates.role) updateData.role = updates.role;
     if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+    if (updates.profilePicture !== undefined) updateData.profilePicture = updates.profilePicture;
     if (updates.password) {
       updateData.passwordHash = await hashPassword(updates.password);
     }
 
     await updateDoc(userRef, updateData);
 
-    return { success: true };
+    // Fetch updated user data to return
+    const updatedUserSnap = await getDoc(userRef);
+    const updatedUserData = updatedUserSnap.data();
+
+    return { 
+      success: true,
+      user: updatedUserData ? {
+        id: userId,
+        username: updatedUserData.username,
+        name: updatedUserData.name,
+        email: updatedUserData.email,
+        phone: updatedUserData.phone,
+        city: updatedUserData.city,
+        state: updatedUserData.state,
+        country: updatedUserData.country,
+        role: updatedUserData.role,
+        companyId: updatedUserData.companyId,
+        profilePicture: updatedUserData.profilePicture,
+        createdAt: updatedUserData.createdAt,
+        isActive: updatedUserData.isActive,
+      } as User : undefined
+    };
   } catch (error) {
     console.error("Error updating user:", error);
     return { success: false, error: "Failed to update user" };

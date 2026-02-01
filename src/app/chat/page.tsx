@@ -17,7 +17,15 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   Card,
+  Button,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  ListItemButton,
+  Divider,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SendIcon from "@mui/icons-material/Send";
@@ -35,6 +43,11 @@ import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import DoneAllIcon from "@mui/icons-material/DoneAll";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import CloseIcon from "@mui/icons-material/Close";
+import AttachFileIcon from "@mui/icons-material/AttachFile";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import DescriptionIcon from "@mui/icons-material/Description";
+import DownloadIcon from "@mui/icons-material/Download";
 import { useAppStore, useCompany } from "@/store";
 import { ChatMessage, Conversation, ChatUser } from "@/types/chat";
 import {
@@ -50,6 +63,8 @@ import {
   getConversationId,
 } from "@/lib/chat";
 import { subscribeToUserLocation, subscribeToAllLocations, LocationData } from "@/lib/locationTracking";
+import { Document, getDocumentCategoryInfo, formatFileSize } from "@/types/document";
+import { subscribeToCompanyDocuments, shareDocumentInChat, recordDocumentDownload } from "@/lib/document";
 
 const getRoleIcon = (role: string) => {
   switch (role) {
@@ -126,6 +141,12 @@ export default function ChatPage() {
   const locationMapRef = useRef<HTMLDivElement>(null);
   const locationMapInstanceRef = useRef<google.maps.Map | null>(null);
   const locationMarkerRef = useRef<google.maps.Marker | null>(null);
+  
+  // Document sharing state
+  const [showDocumentPicker, setShowDocumentPicker] = useState(false);
+  const [companyDocuments, setCompanyDocuments] = useState<Document[]>([]);
+  const [documentSearchQuery, setDocumentSearchQuery] = useState("");
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -256,6 +277,28 @@ export default function ChatPage() {
 
     return () => unsubscribe();
   }, [company?.id]);
+
+  // Subscribe to company documents for sharing
+  useEffect(() => {
+    if (!company?.id) return;
+
+    setLoadingDocuments(true);
+    const unsubscribe = subscribeToCompanyDocuments(company.id, (docs) => {
+      // Filter to only active and accessible documents
+      const accessibleDocs = docs.filter((doc) => {
+        if (user?.role === "admin" || user?.role === "superadmin") return true;
+        if (doc.visibility === "admin_only") return false;
+        if (doc.visibility === "specific_users") {
+          return doc.allowedUserIds?.includes(user?.id || "") || doc.uploadedBy === user?.id;
+        }
+        return true;
+      });
+      setCompanyDocuments(accessibleDocs);
+      setLoadingDocuments(false);
+    });
+
+    return () => unsubscribe();
+  }, [company?.id, user?.id, user?.role]);
 
   // Initialize location map when modal opens
   useEffect(() => {
@@ -445,6 +488,55 @@ export default function ChatPage() {
   const handleVoiceCall = () => {
     alert("Voice call feature coming soon!");
   };
+
+  // Handle document sharing
+  const handleShareDocument = async (doc: Document) => {
+    if (!selectedConversation || !selectedUser || !user || !company?.id) return;
+
+    try {
+      // Share document in chat
+      await shareDocumentInChat(
+        company.id,
+        doc.id,
+        selectedConversation.id,
+        user.id,
+        user.name
+      );
+
+      // Send a message with document info
+      const docMessage = `📎 Shared document: ${doc.name}\n📁 ${getDocumentCategoryInfo(doc.category).label} • ${formatFileSize(doc.fileSize)}\n🔗 ${doc.fileUrl}`;
+      
+      await sendMessage(
+        selectedConversation.id,
+        user.id,
+        user.name,
+        user.role,
+        selectedUser.id,
+        selectedUser.name,
+        docMessage
+      );
+
+      setShowDocumentPicker(false);
+      setDocumentSearchQuery("");
+    } catch (error) {
+      console.error("Error sharing document:", error);
+    }
+  };
+
+  // Handle document download from chat
+  const handleDocumentDownload = async (doc: Document) => {
+    if (!company?.id || !user?.id || !user?.name) return;
+    
+    await recordDocumentDownload(company.id, doc.id, user.id, user.name);
+    window.open(doc.fileUrl, "_blank");
+  };
+
+  // Filter documents by search
+  const filteredDocuments = companyDocuments.filter((doc) =>
+    doc.name.toLowerCase().includes(documentSearchQuery.toLowerCase()) ||
+    doc.description?.toLowerCase().includes(documentSearchQuery.toLowerCase()) ||
+    getDocumentCategoryInfo(doc.category).label.toLowerCase().includes(documentSearchQuery.toLowerCase())
+  );
 
   // Filter users by search query
   const filteredUsers = chatUsers.filter(
@@ -1059,6 +1151,15 @@ export default function ChatPage() {
                 <IconButton size="small" sx={{ mr: 0.5 }}>
                   <ImageIcon sx={{ color: "#262626" }} />
                 </IconButton>
+                <Tooltip title="Share Document">
+                  <IconButton 
+                    size="small" 
+                    sx={{ mr: 0.5 }}
+                    onClick={() => setShowDocumentPicker(true)}
+                  >
+                    <AttachFileIcon sx={{ color: "#262626" }} />
+                  </IconButton>
+                </Tooltip>
                 <TextField
                   inputRef={inputRef}
                   fullWidth
@@ -1283,6 +1384,144 @@ export default function ChatPage() {
             </Box>
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Document Picker Dialog */}
+      <Dialog
+        open={showDocumentPicker}
+        onClose={() => {
+          setShowDocumentPicker(false);
+          setDocumentSearchQuery("");
+        }}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3 }
+        }}
+      >
+        <DialogTitle sx={{ 
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid #dbdbdb",
+        }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <AttachFileIcon color="primary" />
+            <Typography fontWeight={600}>Share Document</Typography>
+          </Stack>
+          <IconButton onClick={() => setShowDocumentPicker(false)} size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {/* Search */}
+          <Box sx={{ p: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search documents..."
+              value={documentSearchQuery}
+              onChange={(e) => setDocumentSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: "#8e8e8e", fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "#efefef",
+                  borderRadius: 2,
+                  "& fieldset": { border: "none" },
+                },
+              }}
+            />
+          </Box>
+
+          {/* Documents List */}
+          <List sx={{ maxHeight: 400, overflow: "auto", pt: 0 }}>
+            {loadingDocuments ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : filteredDocuments.length === 0 ? (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <InsertDriveFileIcon sx={{ fontSize: 48, color: "grey.300", mb: 1 }} />
+                <Typography color="text.secondary">
+                  {documentSearchQuery ? "No documents found" : "No documents available"}
+                </Typography>
+                <Button
+                  href="/documents"
+                  size="small"
+                  sx={{ mt: 1 }}
+                >
+                  Go to Documents
+                </Button>
+              </Box>
+            ) : (
+              filteredDocuments.map((doc, index) => (
+                <div key={doc.id}>
+                  {index > 0 && <Divider />}
+                  <ListItemButton
+                    onClick={() => handleShareDocument(doc)}
+                    sx={{ py: 1.5 }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40, color: getDocumentCategoryInfo(doc.category).color }}>
+                      {doc.type === "pdf" ? (
+                        <PictureAsPdfIcon />
+                      ) : doc.type === "image" ? (
+                        <ImageIcon />
+                      ) : doc.type === "document" ? (
+                        <DescriptionIcon />
+                      ) : (
+                        <InsertDriveFileIcon />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      disableTypography
+                      primary={
+                        <Typography variant="body2" fontWeight={500} noWrap>
+                          {doc.name}
+                        </Typography>
+                      }
+                      secondary={
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                          <Chip
+                            size="small"
+                            label={getDocumentCategoryInfo(doc.category).label}
+                            sx={{ 
+                              height: 18, 
+                              fontSize: 10,
+                              bgcolor: getDocumentCategoryInfo(doc.category).color + "20",
+                              color: getDocumentCategoryInfo(doc.category).color,
+                            }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {formatFileSize(doc.fileSize)}
+                          </Typography>
+                        </Stack>
+                      }
+                    />
+                    <SendIcon sx={{ fontSize: 18, color: "#0095f6" }} />
+                  </ListItemButton>
+                </div>
+              ))
+            )}
+          </List>
+        </DialogContent>
+        <DialogActions sx={{ borderTop: "1px solid #dbdbdb", p: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            href="/documents"
+          >
+            Manage Documents
+          </Button>
+          <Button onClick={() => setShowDocumentPicker(false)}>
+            Cancel
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

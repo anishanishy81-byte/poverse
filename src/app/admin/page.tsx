@@ -40,11 +40,18 @@ import {
   Tab,
   CircularProgress,
   Badge,
+  Drawer,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import PeopleIcon from "@mui/icons-material/People";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import PersonIcon from "@mui/icons-material/Person";
 import LogoutIcon from "@mui/icons-material/Logout";
+import MenuIcon from "@mui/icons-material/Menu";
+import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -66,9 +73,13 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import DirectionsWalkIcon from "@mui/icons-material/DirectionsWalk";
 import TargetIcon from "@mui/icons-material/TrackChanges";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import ReceiptIcon from "@mui/icons-material/Receipt";
+import FolderIcon from "@mui/icons-material/Folder";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import { useAppStore, useIsAdmin, useIsSuperAdmin, useCompany } from "@/store";
 import { User, UserRole, Company } from "@/types/auth";
 import { countries, getStatesForCountry, getCitiesForState } from "@/lib/locationData";
+import NotificationCenter from "@/components/NotificationCenter";
 import {
   AgentActivity,
   LeaderboardEntry,
@@ -104,6 +115,8 @@ export default function AdminDashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null);
 
   // Dashboard Analytics State - simplified analytics type for dashboard display
   type SimpleAnalytics = {
@@ -181,6 +194,25 @@ export default function AdminDashboardPage() {
       fetchUsers();
     }
   }, [isAuthenticated, isAdmin, isSuperAdmin, user?.companyId]);
+
+  // Fetch user profile picture
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.id) return;
+      try {
+        const response = await fetch("/api/profile", {
+          headers: { "x-user-id": user.id },
+        });
+        const data = await response.json();
+        if (data.success && data.user?.profilePicture) {
+          setUserProfilePicture(data.user.profilePicture);
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+      }
+    };
+    fetchUserProfile();
+  }, [user?.id]);
 
   // Load analytics data
   const loadAnalyticsData = useCallback(async () => {
@@ -477,146 +509,275 @@ export default function AdminDashboardPage() {
   const totalUsers = company ? company.adminCount + company.agentCount : 0;
   const userLimitPercentage = company ? (totalUsers / company.userLimit) * 100 : 0;
 
+  // Admin navigation menu items
+  const adminNavItems = [
+    { label: "Live Map", icon: <MapIcon />, path: "/admin/maps" },
+    { label: "Attendance", icon: <CalendarMonthIcon />, path: "/admin/attendance" },
+    { label: "Reports", icon: <AssessmentIcon />, path: "/admin/reports" },
+    { label: "Targets", icon: <FlagIcon />, path: "/targets" },
+    { label: "Assign Targets", icon: <TargetIcon />, path: "/admin/targets" },
+    { label: "Leave", icon: <CalendarMonthIcon />, path: "/admin/leave" },
+    { label: "Expenses", icon: <ReceiptIcon />, path: "/admin/expenses" },
+    { label: "Documents", icon: <FolderIcon />, path: "/admin/documents" },
+    { label: "Customers", icon: <PeopleAltIcon />, path: "/crm" },
+    { label: "Chat", icon: <ChatIcon />, path: "/chat" },
+    { label: "Profile", icon: <AccountCircleIcon />, path: "/profile" },
+  ];
+
   if (!isAuthenticated || !isAdmin || isSuperAdmin) {
     return null;
   }
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f5f5f5" }}>
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        anchor="left"
+        open={mobileMenuOpen}
+        onClose={() => setMobileMenuOpen(false)}
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: 280,
+            background: "linear-gradient(180deg, #f59e0b 0%, #d97706 100%)",
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {userProfilePicture ? (
+                <Avatar
+                  src={userProfilePicture}
+                  alt={user?.name}
+                  sx={{ width: 40, height: 40 }}
+                />
+              ) : (
+                <Avatar sx={{ width: 40, height: 40, bgcolor: "rgba(255,255,255,0.2)" }}>
+                  {user?.name?.charAt(0)?.toUpperCase() || <SupervisorAccountIcon />}
+                </Avatar>
+              )}
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "white" }}>
+                  {user?.name}
+                </Typography>
+                <Chip
+                  label="ADMIN"
+                  size="small"
+                  sx={{ height: 18, fontSize: "0.6rem", bgcolor: "#92400e", color: "white" }}
+                />
+              </Box>
+            </Stack>
+            <IconButton onClick={() => setMobileMenuOpen(false)} sx={{ color: "white" }}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", mb: 1 }} />
+        </Box>
+        <List sx={{ px: 1 }}>
+          {adminNavItems.map((item) => (
+            <ListItemButton
+              key={item.path}
+              onClick={() => {
+                router.push(item.path);
+                setMobileMenuOpen(false);
+              }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                color: "white",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.15)",
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          ))}
+          <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", my: 1 }} />
+          <ListItemButton
+            onClick={handleLogout}
+            sx={{
+              borderRadius: 2,
+              color: "#ffcdd2",
+              "&:hover": {
+                bgcolor: "rgba(255,205,210,0.15)",
+              },
+            }}
+          >
+            <ListItemIcon sx={{ color: "#ffcdd2", minWidth: 40 }}>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItemButton>
+        </List>
+      </Drawer>
+
       {/* Header */}
       <Box
         sx={{
           background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-          py: 2,
-          px: 3,
+          py: 1.5,
+          px: { xs: 2, md: 3 },
+          position: "sticky",
+          top: 0,
+          zIndex: 1100,
         }}
       >
         <Container maxWidth="xl">
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Stack direction="row" spacing={2} alignItems="center">
+            {/* Left: Menu + Logo */}
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              {/* Mobile Menu Button */}
+              <IconButton
+                onClick={() => setMobileMenuOpen(true)}
+                sx={{ color: "white", display: { xs: "flex", lg: "none" } }}
+              >
+                <MenuIcon />
+              </IconButton>
+              
               {company?.logo ? (
                 <Avatar
                   src={company.logo}
                   alt={company.name}
-                  sx={{ width: 40, height: 40, borderRadius: 1 }}
+                  sx={{ width: { xs: 36, md: 40 }, height: { xs: 36, md: 40 }, borderRadius: 1 }}
                   variant="rounded"
                 />
               ) : (
-                <Avatar sx={{ width: 40, height: 40, bgcolor: "rgba(255,255,255,0.2)", borderRadius: 1 }} variant="rounded">
+                <Avatar sx={{ width: { xs: 36, md: 40 }, height: { xs: 36, md: 40 }, bgcolor: "rgba(255,255,255,0.2)", borderRadius: 1 }} variant="rounded">
                   <BusinessIcon />
                 </Avatar>
               )}
-              <Typography variant="h5" fontWeight={700} sx={{ color: "white" }}>
+              <Typography 
+                variant="h6" 
+                fontWeight={700} 
+                sx={{ color: "white", display: { xs: "none", sm: "block" } }}
+              >
                 {company?.name || "Admin Dashboard"}
               </Typography>
             </Stack>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Avatar sx={{ width: 36, height: 36, bgcolor: "rgba(255,255,255,0.2)" }}>
-                  <SupervisorAccountIcon />
-                </Avatar>
+
+            {/* Desktop Navigation */}
+            <Stack 
+              direction="row" 
+              spacing={0.5} 
+              alignItems="center"
+              sx={{ display: { xs: "none", lg: "flex" } }}
+            >
+              {adminNavItems.slice(0, 8).map((item) => (
+                <Tooltip key={item.path} title={item.label}>
+                  <IconButton
+                    onClick={() => router.push(item.path)}
+                    size="small"
+                    sx={{
+                      color: "white",
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                    }}
+                  >
+                    {item.icon}
+                  </IconButton>
+                </Tooltip>
+              ))}
+            </Stack>
+
+            {/* Right: User Info + Actions */}
+            <Stack direction="row" spacing={1} alignItems="center">
+              {/* User info - desktop only */}
+              <Stack 
+                direction="row" 
+                spacing={1} 
+                alignItems="center" 
+                sx={{ 
+                  display: { xs: "none", md: "flex" },
+                  bgcolor: "rgba(255,255,255,0.1)",
+                  borderRadius: 2,
+                  px: 1.5,
+                  py: 0.5,
+                }}
+              >
+                {userProfilePicture ? (
+                  <Avatar 
+                    src={userProfilePicture}
+                    alt={user?.name}
+                    sx={{ width: 28, height: 28 }}
+                  />
+                ) : (
+                  <Avatar sx={{ width: 28, height: 28, bgcolor: "rgba(255,255,255,0.2)" }}>
+                    <SupervisorAccountIcon sx={{ fontSize: 18 }} />
+                  </Avatar>
+                )}
                 <Box>
-                  <Typography fontWeight={500} sx={{ color: "white", fontSize: "0.9rem" }}>
+                  <Typography fontWeight={500} sx={{ color: "white", fontSize: "0.8rem", lineHeight: 1.2 }}>
                     {user?.name}
                   </Typography>
                   <Chip
                     label="ADMIN"
                     size="small"
-                    sx={{ height: 18, fontSize: "0.6rem", bgcolor: "#92400e", color: "white" }}
+                    sx={{ height: 16, fontSize: "0.55rem", bgcolor: "#92400e", color: "white" }}
                   />
                 </Box>
               </Stack>
-              <Button
-                variant="contained"
-                startIcon={<MapIcon />}
-                onClick={() => router.push("/admin/maps")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
+              
+              <NotificationCenter iconColor="white" />
+              
+              {/* Quick Actions - tablet only */}
+              <Stack 
+                direction="row" 
+                spacing={0.5} 
+                sx={{ display: { xs: "none", sm: "flex", lg: "none" } }}
               >
-                Live Map
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<CalendarMonthIcon />}
-                onClick={() => router.push("/admin/attendance")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Attendance
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AssessmentIcon />}
-                onClick={() => router.push("/admin/reports")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Reports
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<FlagIcon />}
-                onClick={() => router.push("/targets")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Targets
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<ChatIcon />}
-                onClick={() => router.push("/chat")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Chat
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<AccountCircleIcon />}
-                onClick={() => router.push("/profile")}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Profile
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<LogoutIcon />}
-                onClick={handleLogout}
-                size="small"
-                sx={{
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  color: "white",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.3)" },
-                }}
-              >
-                Logout
-              </Button>
+                <Tooltip title="Live Map">
+                  <IconButton
+                    onClick={() => router.push("/admin/maps")}
+                    size="small"
+                    sx={{ color: "white" }}
+                  >
+                    <MapIcon />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Reports">
+                  <IconButton
+                    onClick={() => router.push("/admin/reports")}
+                    size="small"
+                    sx={{ color: "white" }}
+                  >
+                    <AssessmentIcon />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+              
+              {/* Profile Button */}
+              <Tooltip title="Profile">
+                <IconButton
+                  onClick={() => router.push("/profile")}
+                  sx={{ color: "white", p: 0.5 }}
+                  size="small"
+                >
+                  {userProfilePicture ? (
+                    <Avatar 
+                      src={userProfilePicture}
+                      alt={user?.name}
+                      sx={{ width: 28, height: 28 }}
+                    />
+                  ) : (
+                    <AccountCircleIcon />
+                  )}
+                </IconButton>
+              </Tooltip>
+
+              {/* Logout */}
+              <Tooltip title="Logout">
+                <IconButton
+                  onClick={handleLogout}
+                  sx={{ color: "white" }}
+                  size="small"
+                >
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
             </Stack>
           </Stack>
         </Container>

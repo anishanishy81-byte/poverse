@@ -1,6 +1,86 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { storage } from "./firebase";
 
+// Upload profile picture
+export async function uploadProfilePicture(
+  userId: string,
+  base64Data: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    // Extract the base64 content and mime type
+    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    
+    if (!matches || matches.length !== 3) {
+      return { success: false, error: "Invalid image data" };
+    }
+
+    const mimeType = matches[1];
+    const base64Content = matches[2];
+    
+    // Determine file extension from mime type
+    let extension = "png";
+    if (mimeType.includes("jpeg") || mimeType.includes("jpg")) {
+      extension = "jpg";
+    } else if (mimeType.includes("gif")) {
+      extension = "gif";
+    } else if (mimeType.includes("webp")) {
+      extension = "webp";
+    }
+
+    // Convert base64 to blob
+    const byteCharacters = atob(base64Content);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+
+    // Create storage reference
+    const fileName = `profile-pictures/${userId}/avatar.${extension}`;
+    const storageRef = ref(storage, fileName);
+
+    // Upload the file
+    await uploadBytes(storageRef, blob, {
+      contentType: mimeType,
+    });
+
+    // Get the download URL
+    const downloadURL = await getDownloadURL(storageRef);
+
+    return { success: true, url: downloadURL };
+  } catch (error) {
+    console.error("Error uploading profile picture:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, error: `Failed to upload profile picture: ${errorMessage}` };
+  }
+}
+
+// Delete profile picture
+export async function deleteProfilePicture(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const extensions = ["png", "jpg", "gif", "webp"];
+    
+    for (const ext of extensions) {
+      try {
+        const fileName = `profile-pictures/${userId}/avatar.${ext}`;
+        const storageRef = ref(storage, fileName);
+        await deleteObject(storageRef);
+        return { success: true };
+      } catch {
+        continue;
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting profile picture:", error);
+    return { success: false, error: "Failed to delete profile picture" };
+  }
+}
+
 // Upload company logo
 export async function uploadCompanyLogo(
   companyId: string,
