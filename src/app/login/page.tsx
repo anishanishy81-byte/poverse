@@ -34,6 +34,8 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Sora, Manrope } from "next/font/google";
 import { useAppStore } from "@/store";
+import GetAppIcon from "@mui/icons-material/GetApp";
+import { isNativeApp } from "@/lib/platform";
 
 const sora = Sora({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
@@ -321,13 +323,37 @@ export default function LoginPage() {
 
                   <Divider />
 
-                  <Stack spacing={1} alignItems="center">
+                  <Stack spacing={1.5} alignItems="center">
                     <Typography variant="body2" color="text.secondary">
                       Need access? Contact your company admin.
                     </Typography>
-                    <MuiLink component={Link} href="/" underline="hover" color="text.primary">
-                      {"<- Back to Home"}
-                    </MuiLink>
+                    <Stack direction="row" spacing={1} justifyContent="center" width="100%">
+                      <MuiLink component={Link} href="/" underline="hover" color="text.primary">
+                        {"<- Back to Home"}
+                      </MuiLink>
+                    </Stack>
+                    {!isNativeApp() && (
+                      <Button
+                        component="a"
+                        href="/downloads/po-verse.apk"
+                        download
+                        startIcon={<GetAppIcon />}
+                        variant="outlined"
+                        size="small"
+                        sx={{
+                          mt: 1,
+                          color: "var(--accent)",
+                          borderColor: "var(--accent)",
+                          "&:hover": {
+                            borderColor: "var(--accent-2)",
+                            color: "var(--accent-2)",
+                            bgcolor: "rgba(27,212,200,0.08)",
+                          },
+                        }}
+                      >
+                        Download Mobile App
+                      </Button>
+                    )}
                   </Stack>
                 </Stack>
               </Paper>

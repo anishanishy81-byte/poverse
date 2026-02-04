@@ -32,6 +32,7 @@ import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
 import ShieldIcon from "@mui/icons-material/Shield";
 import AutoGraphIcon from "@mui/icons-material/AutoGraph";
+import GetAppIcon from "@mui/icons-material/GetApp";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -254,6 +255,27 @@ export default function LandingPage() {
           </Box>
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" spacing={1.5} alignItems="center">
+            <Button
+              component="a"
+              href="/downloads/po-verse.apk"
+              download
+              variant="outlined"
+              size="small"
+              startIcon={<GetAppIcon />}
+              sx={{
+                color: "white",
+                borderColor: "rgba(27,212,200,0.4)",
+                textTransform: "none",
+                borderRadius: 2,
+                px: 2.5,
+                "&:hover": { 
+                  borderColor: "var(--accent)", 
+                  bgcolor: "rgba(27,212,200,0.1)" 
+                },
+              }}
+            >
+              Download App
+            </Button>
             <Button
               component={Link}
               href="/login"

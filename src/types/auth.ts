@@ -78,6 +78,8 @@ export interface CreateCompanyData {
   website?: string;
   description?: string;
   userLimit?: number;
+  adminLimit?: number;
+  agentLimit?: number;
 }
 
 export interface CompanyResponse {

@@ -280,7 +280,7 @@ export const resolveConflict = async (
     action.status = "pending";
     action.retryCount = 0;
     if (resolution === "merge" && mergedData) {
-      action.payload = mergedData;
+      (action as any).payload = mergedData;
     }
     action.conflictData.resolution = resolution;
     await dbPut(OFFLINE_STORES.ACTIONS, action);

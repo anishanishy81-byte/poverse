@@ -1,5 +1,5 @@
 // Admin Dashboard Library
-import { realtimeDb } from "./firebase";
+import { realtimeDb, db } from "./firebase";
 import {
   ref,
   get,
@@ -12,6 +12,7 @@ import {
   equalTo,
   limitToLast,
 } from "firebase/database";
+import { collection, getDocs, where, query as firestoreQuery } from "firebase/firestore";
 import {
   AgentActivity,
   ActivityType,
@@ -796,8 +797,45 @@ export const subscribeToAgentStatuses = (
 ): (() => void) => {
   const statusMap = new Map<string, AgentStatus>();
   const unsubscribes: (() => void)[] = [];
+  let isInitialized = false;
   
-  // Subscribe to presence to get all agents
+  // Fetch all users for this company and initialize status map
+  const initializeAllUsers = async () => {
+    try {
+      const usersRef = collection(db, "users");
+      const usersQuery = firestoreQuery(usersRef, where("companyId", "==", companyId));
+      
+      // Initial fetch of all company users
+      const usersSnapshot = await getDocs(usersQuery);
+      usersSnapshot.forEach((doc) => {
+        const userData = doc.data();
+        const userId = doc.id;
+        
+        // Create initial status for each user (default to offline)
+        statusMap.set(userId, {
+          agentId: userId,
+          agentName: userData.name || userData.username || userId,
+          companyId,
+          isOnline: false,
+          lastSeen: "",
+          currentStatus: "checked_out" as const,
+          status: "offline" as const,
+        });
+      });
+      
+      isInitialized = true;
+      // Trigger callback after all users are loaded
+      updateCallback();
+    } catch (error) {
+      console.error("Error fetching company users:", error);
+      isInitialized = true;
+    }
+  };
+  
+  // Start by loading all users
+  initializeAllUsers();
+  
+  // Subscribe to presence to update online/offline status
   const presenceRef = ref(realtimeDb, "presence");
   const presenceUnsub = onValue(presenceRef, (snapshot) => {
     if (snapshot.exists()) {
@@ -805,30 +843,25 @@ export const subscribeToAgentStatuses = (
         const userId = child.key!;
         const presence = child.val();
         
-        // Only track users from this company (we'll filter by companyId in the presence data)
-        if (presence.companyId === companyId || !presence.companyId) {
-          const existing = statusMap.get(userId) || {
-            agentId: userId,
-            agentName: presence.name || userId,
-            companyId,
-            isOnline: false,
-            lastSeen: "",
-            currentStatus: "offline" as const,
-            status: "offline" as const,
-          };
-          
+        // Update presence for users in our company
+        const existing = statusMap.get(userId);
+        if (existing && presence.companyId === companyId) {
+          // Update with presence data
           statusMap.set(userId, {
             ...existing,
             isOnline: presence.isOnline || false,
             lastSeen: presence.lastActive || "",
-            agentName: presence.name || existing.agentName || userId,
+            agentName: presence.name || existing.agentName,
             status: presence.isOnline ? "online" : "offline",
             currentStatus: presence.isOnline ? "on_duty" : "checked_out",
           });
         }
       });
     }
-    updateCallback();
+    
+    if (isInitialized) {
+      updateCallback();
+    }
   });
   unsubscribes.push(() => off(presenceRef));
   
@@ -839,6 +872,7 @@ export const subscribeToAgentStatuses = (
     if (snapshot.exists()) {
       snapshot.forEach((child) => {
         const record = child.val() as AttendanceRecord;
+        // Only process records for this company
         if (record.companyId === companyId && record.date === today) {
           const existing = statusMap.get(record.userId);
           if (existing) {
@@ -851,7 +885,9 @@ export const subscribeToAgentStatuses = (
         }
       });
     }
-    updateCallback();
+    if (isInitialized) {
+      updateCallback();
+    }
   });
   unsubscribes.push(() => off(attendanceRef));
   

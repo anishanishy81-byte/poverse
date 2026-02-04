@@ -50,10 +50,14 @@ export default function SessionGuard({ children }: { children: React.ReactNode }
       try {
         const result = await validateSession(user.id);
         if (!result.valid) {
-          handleSessionInvalid(result.reason || "Session invalid");
+          // Add a small delay to show graceful message
+          setTimeout(() => {
+            handleSessionInvalid(result.reason || "Session invalid");
+          }, 500);
         }
       } catch (error) {
         console.error("Session validation error:", error);
+        // Don't log out on validation error
       } finally {
         setIsValidating(false);
       }

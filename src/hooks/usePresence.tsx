@@ -42,6 +42,8 @@ export function usePresence() {
           await set(presenceRef, {
             isOnline: true,
             lastActive: new Date().toISOString(),
+            name: user.name,
+            companyId: user.companyId,
           });
         }
       });
@@ -53,6 +55,8 @@ export function usePresence() {
         set(presenceRef, {
           isOnline: true,
           lastActive: new Date().toISOString(),
+          name: user.name,
+          companyId: user.companyId,
         });
       }
     };
@@ -63,6 +67,8 @@ export function usePresence() {
         set(presenceRef, {
           isOnline: true,
           lastActive: new Date().toISOString(),
+          name: user.name,
+          companyId: user.companyId,
         });
       }
     };

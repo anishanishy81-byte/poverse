@@ -80,6 +80,8 @@ export const createSession = async (userId: string): Promise<string> => {
   if (typeof window !== "undefined") {
     localStorage.setItem("sessionToken", sessionToken);
     localStorage.setItem("sessionUserId", userId);
+    // Mark login time to allow grace period
+    localStorage.setItem("sessionLoginTime", Date.now().toString());
   }
   
   return sessionToken;
@@ -96,6 +98,16 @@ export const validateSession = async (userId: string): Promise<{
   
   const storedToken = localStorage.getItem("sessionToken");
   const storedUserId = localStorage.getItem("sessionUserId");
+  
+  // Grace period after login (5 seconds) to allow for initial setup
+  const loginTime = localStorage.getItem("sessionLoginTime");
+  if (loginTime) {
+    const timeSinceLogin = Date.now() - parseInt(loginTime);
+    if (timeSinceLogin < 5000) {
+      // Still in grace period, skip validation
+      return { valid: true };
+    }
+  }
   
   // If no token stored but user is in Zustand state, 
   // this might be a hydration issue - give benefit of doubt briefly
@@ -162,12 +174,19 @@ export const subscribeToSessionChanges = (
   
   const sessionRef = ref(realtimeDb, `${SESSIONS_PATH}/${userId}`);
   let isFirstLoad = true;
+  let loginTime = parseInt(localStorage.getItem("sessionLoginTime") || "0");
   
   const unsubscribe = onValue(sessionRef, (snapshot) => {
     // Skip the first callback - this is the initial data load
     if (isFirstLoad) {
       isFirstLoad = false;
       return;
+    }
+    
+    // Skip validation during grace period (5 seconds after login)
+    const timeSinceLogin = Date.now() - loginTime;
+    if (timeSinceLogin < 5000) {
+      return; // Still in grace period
     }
     
     if (!snapshot.exists()) {
