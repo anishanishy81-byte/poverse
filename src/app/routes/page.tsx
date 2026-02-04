@@ -14,7 +14,6 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
-  ListItemSecondaryAction,
   Chip,
   CircularProgress,
   Alert,
@@ -26,7 +25,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tooltip,
   ToggleButton,
   ToggleButtonGroup,
   Collapse,
@@ -64,26 +62,65 @@ import {
   RouteWaypoint,
   RouteSummary,
   RouteMapData,
-  NavigationLink,
+  RouteLeg,
+  RouteStep,
 } from "@/types/route";
 import {
   createOptimizedRoute,
-  getActiveRoute,
   subscribeToActiveRoute,
   startRoute,
   pauseRoute,
   completeRouteWaypoint,
   skipRouteWaypoint,
   cancelRoute,
-  generateNavigationLinks,
-  openNavigation,
   getRouteSummary,
   getRouteMapData,
-  calculateETAs,
   formatTimeForDisplay,
-  getTimeUntil,
 } from "@/lib/routeOptimization";
 import { subscribeToUserActiveVisits } from "@/lib/targetTracking";
+
+type TravelMode = "DRIVING" | "WALKING" | "BICYCLING" | "TRANSIT";
+
+const stripHtml = (value: string): string =>
+  value.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
+
+const buildRouteLeg = (leg: google.maps.DirectionsLeg): RouteLeg => ({
+  startAddress: leg.start_address || "",
+  endAddress: leg.end_address || "",
+  distance: {
+    text: leg.distance?.text || "",
+    value: leg.distance?.value || 0,
+  },
+  duration: {
+    text: leg.duration?.text || "",
+    value: leg.duration?.value || 0,
+  },
+  durationInTraffic: leg.duration_in_traffic
+    ? { text: leg.duration_in_traffic.text, value: leg.duration_in_traffic.value }
+    : undefined,
+  steps: leg.steps.map((step) => ({
+    instruction: stripHtml(step.instructions || ""),
+    distance: {
+      text: step.distance?.text || "",
+      value: step.distance?.value || 0,
+    },
+    duration: {
+      text: step.duration?.text || "",
+      value: step.duration?.value || 0,
+    },
+    startLocation: {
+      lat: step.start_location.lat(),
+      lng: step.start_location.lng(),
+    },
+    endLocation: {
+      lat: step.end_location.lat(),
+      lng: step.end_location.lng(),
+    },
+    maneuver: step.maneuver,
+    polyline: step.polyline?.points || "",
+  })) as RouteStep[],
+  waypointIndex: 0,
+});
 
 export default function RoutesPage() {
   const router = useRouter();
@@ -113,6 +150,13 @@ export default function RoutesPage() {
   const [expandedWaypoint, setExpandedWaypoint] = useState<string | null>(null);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [navigationTarget, setNavigationTarget] = useState<RouteWaypoint | null>(null);
+  const [navigationMode, setNavigationMode] = useState<TravelMode>("DRIVING");
+  const [navigationLeg, setNavigationLeg] = useState<RouteLeg | null>(null);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
+  const [isNavLoading, setIsNavLoading] = useState(false);
+  const [showNavSteps, setShowNavSteps] = useState(false);
 
   // Map refs
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -189,6 +233,17 @@ export default function RoutesPage() {
     return () => unsubscribe();
   }, [user?.id, userLat, userLon]);
 
+  useEffect(() => {
+    if (activeRoute) return;
+    setNavigationTarget(null);
+    setNavigationLeg(null);
+    setNavigationError(null);
+    setShowNavSteps(false);
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setMap(null);
+    }
+  }, [activeRoute]);
+
   // Update map when route data changes
   useEffect(() => {
     if (!mapsLoaded || !mapContainerRef.current || viewMode !== "map") return;
@@ -208,6 +263,7 @@ export default function RoutesPage() {
           },
         ],
       });
+      setMapReady(true);
     }
 
     // Clear existing markers
@@ -221,6 +277,7 @@ export default function RoutesPage() {
     }
 
     if (!routeMapData) return;
+    const showOverview = !navigationTarget;
 
     // Add markers
     routeMapData.markers.forEach((marker) => {
@@ -264,8 +321,8 @@ export default function RoutesPage() {
       markersRef.current.push(gMarker);
     });
 
-    // Draw polyline
-    if (routeMapData.polylinePath.length > 0) {
+    // Draw polyline for overview (skip when navigating)
+    if (showOverview && routeMapData.polylinePath.length > 0) {
       polylineRef.current = new google.maps.Polyline({
         path: routeMapData.polylinePath,
         geodesic: true,
@@ -276,8 +333,8 @@ export default function RoutesPage() {
       polylineRef.current.setMap(mapRef.current);
     }
 
-    // Fit bounds
-    if (routeMapData.bounds) {
+    // Fit bounds for overview only
+    if (showOverview && routeMapData.bounds) {
       const bounds = new google.maps.LatLngBounds(
         routeMapData.bounds.southwest,
         routeMapData.bounds.northeast
@@ -303,7 +360,105 @@ export default function RoutesPage() {
       });
       markersRef.current.push(currentLocMarker);
     }
-  }, [mapsLoaded, viewMode, routeMapData, userLat, userLon]);
+  }, [mapsLoaded, viewMode, routeMapData, userLat, userLon, navigationTarget]);
+
+  const requestNavigationRoute = useCallback(
+    async (target: RouteWaypoint, mode: TravelMode) => {
+      if (!mapsLoaded || !mapReady || viewMode !== "map" || !mapRef.current) return;
+      if (!userLat || !userLon) {
+        setNavigationError("Current location is not available.");
+        return;
+      }
+
+      setIsNavLoading(true);
+      setNavigationError(null);
+      setNavigationLeg(null);
+
+      try {
+        const directionsService = new google.maps.DirectionsService();
+        const travelMode = google.maps.TravelMode[mode];
+
+        const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+          directionsService.route(
+            {
+              origin: { lat: userLat, lng: userLon },
+              destination: {
+                lat: target.location.latitude,
+                lng: target.location.longitude,
+              },
+              travelMode,
+              drivingOptions:
+                mode === "DRIVING"
+                  ? {
+                      departureTime: new Date(),
+                      trafficModel: google.maps.TrafficModel.BEST_GUESS,
+                    }
+                  : undefined,
+            },
+            (response, status) => {
+              if (status === google.maps.DirectionsStatus.OK && response) {
+                resolve(response);
+              } else {
+                reject(new Error(status));
+              }
+            }
+          );
+        });
+
+        if (!directionsRendererRef.current) {
+          directionsRendererRef.current = new google.maps.DirectionsRenderer({
+            suppressMarkers: true,
+            preserveViewport: false,
+            polylineOptions: {
+              strokeColor: "#1a73e8",
+              strokeOpacity: 0.9,
+              strokeWeight: 5,
+            },
+          });
+        }
+
+        directionsRendererRef.current.setMap(mapRef.current);
+        directionsRendererRef.current.setDirections(result);
+
+        const leg = result.routes[0]?.legs?.[0];
+        if (leg) {
+          setNavigationLeg(buildRouteLeg(leg));
+        } else {
+          setNavigationLeg(null);
+        }
+      } catch (err) {
+        console.error("Navigation route error:", err);
+        setNavigationError("Failed to load in-app navigation. Try refresh.");
+        setNavigationLeg(null);
+        if (directionsRendererRef.current) {
+          directionsRendererRef.current.setMap(null);
+        }
+      } finally {
+        setIsNavLoading(false);
+      }
+    },
+    [mapsLoaded, mapReady, viewMode, userLat, userLon]
+  );
+
+  useEffect(() => {
+    if (!navigationTarget) {
+      setNavigationLeg(null);
+      setNavigationError(null);
+      setShowNavSteps(false);
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setMap(null);
+      }
+      return;
+    }
+
+    requestNavigationRoute(navigationTarget, navigationMode);
+  }, [navigationTarget, navigationMode, requestNavigationRoute]);
+
+  useEffect(() => {
+    if (viewMode !== "map" && directionsRendererRef.current) {
+      directionsRendererRef.current.setMap(null);
+    }
+  }, [viewMode]);
 
   const getMarkerColor = (type: string): string => {
     switch (type) {
@@ -375,15 +530,29 @@ export default function RoutesPage() {
   };
 
   const handleNavigate = (waypoint: RouteWaypoint) => {
-    openNavigation(
-      {
-        name: waypoint.targetName,
-        latitude: waypoint.location.latitude,
-        longitude: waypoint.location.longitude,
-      },
-      userLat && userLon ? { latitude: userLat, longitude: userLon } : undefined,
-      "google"
-    );
+    setNavigationTarget(waypoint);
+    setViewMode("map");
+    setShowNavSteps(false);
+    setNavigationError(null);
+
+    if (!userLat || !userLon) {
+      setNavigationError("Current location is not available.");
+    }
+  };
+
+  const handleStopNavigation = () => {
+    setNavigationTarget(null);
+    setNavigationLeg(null);
+    setNavigationError(null);
+    setShowNavSteps(false);
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setMap(null);
+    }
+  };
+
+  const handleRefreshNavigation = () => {
+    if (!navigationTarget) return;
+    requestNavigationRoute(navigationTarget, navigationMode);
   };
 
   const getWaypointStatusChip = (status: string) => {
@@ -659,6 +828,125 @@ export default function RoutesPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* In-app Navigation Panel */}
+            {navigationTarget && (
+              <Paper sx={{ p: 2, mb: 2, border: 1, borderColor: "primary.light" }}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={2}
+                  alignItems={{ sm: "center" }}
+                  justifyContent="space-between"
+                >
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      IN-APP NAVIGATION
+                    </Typography>
+                    <Typography variant="h6">{navigationTarget.targetName}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {navigationTarget.location.address}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<RefreshIcon />}
+                      onClick={handleRefreshNavigation}
+                      disabled={isNavLoading}
+                    >
+                      Refresh
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      size="small"
+                      startIcon={<StopIcon />}
+                      onClick={handleStopNavigation}
+                    >
+                      Stop
+                    </Button>
+                  </Stack>
+                </Stack>
+
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={2}
+                  alignItems={{ sm: "center" }}
+                  sx={{ mt: 2 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    Mode
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={navigationMode}
+                    exclusive
+                    onChange={(_, val) => val && setNavigationMode(val as TravelMode)}
+                    size="small"
+                  >
+                    <ToggleButton value="DRIVING">Drive</ToggleButton>
+                    <ToggleButton value="WALKING">Walk</ToggleButton>
+                    <ToggleButton value="BICYCLING">Bike</ToggleButton>
+                    <ToggleButton value="TRANSIT">Transit</ToggleButton>
+                  </ToggleButtonGroup>
+                  {isNavLoading && <CircularProgress size={18} />}
+                  {navigationLeg && (
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Chip
+                        icon={<RouteIcon />}
+                        label={navigationLeg.distance.text || "Distance"}
+                        size="small"
+                      />
+                      <Chip
+                        icon={<AccessTimeIcon />}
+                        label={navigationLeg.duration.text || "Duration"}
+                        size="small"
+                      />
+                      {navigationLeg.durationInTraffic?.text && (
+                        <Chip
+                          label={`Traffic: ${navigationLeg.durationInTraffic.text}`}
+                          size="small"
+                        />
+                      )}
+                    </Stack>
+                  )}
+                </Stack>
+
+                {navigationError && (
+                  <Alert severity="warning" sx={{ mt: 2 }}>
+                    {navigationError}
+                  </Alert>
+                )}
+
+                {navigationLeg && navigationLeg.steps.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    <Button
+                      size="small"
+                      endIcon={showNavSteps ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      onClick={() => setShowNavSteps((prev) => !prev)}
+                    >
+                      {showNavSteps ? "Hide turn-by-turn" : "Show turn-by-turn"}
+                    </Button>
+                    <Collapse in={showNavSteps}>
+                      <Stepper orientation="vertical" sx={{ mt: 1 }}>
+                        {navigationLeg.steps.map((step, index) => (
+                          <Step key={`${step.instruction}-${index}`} active>
+                            <StepLabel>
+                              <Typography variant="body2">{step.instruction}</Typography>
+                            </StepLabel>
+                            <StepContent>
+                              <Typography variant="caption" color="text.secondary">
+                                {step.distance.text} - {step.duration.text}
+                              </Typography>
+                            </StepContent>
+                          </Step>
+                        ))}
+                      </Stepper>
+                    </Collapse>
+                  </Box>
+                )}
+              </Paper>
+            )}
 
             {/* Map View */}
             {viewMode === "map" && (

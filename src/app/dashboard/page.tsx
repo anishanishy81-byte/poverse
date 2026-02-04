@@ -62,10 +62,11 @@ import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import CloseIcon from "@mui/icons-material/Close";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import GetAppIcon from "@mui/icons-material/GetApp";
 import { useAppStore, useCompany } from "@/store";
 import { Company } from "@/types/auth";
 import { useTrackedLocation } from "@/hooks";
-import { LocationMap, LocationPermissionDialog } from "@/components";
+import { DownloadAppButton, LocationMap, LocationPermissionDialog } from "@/components";
 import NotificationCenter from "@/components/NotificationCenter";
 import { OfflineIndicator, OfflineBanner } from "@/components/OfflineIndicator";
 import { TargetVisit } from "@/types/target";
@@ -103,11 +104,14 @@ import {
   formatCurrency,
   DEFAULT_AGENT_GOALS,
 } from "@/lib/dashboard";
+import { isNativeApp } from "@/lib/platform";
 
 export default function AgentDashboard() {
   const router = useRouter();
   const { isAuthenticated, user, logout, setCompany: setStoreCompany } = useAppStore();
   const storedCompany = useCompany();
+  const showDownload = !isNativeApp();
+  const appDownloadUrl = process.env.NEXT_PUBLIC_APP_DOWNLOAD_URL || "/downloads/po-verse.apk";
   
   const [company, setCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -456,6 +460,26 @@ export default function AgentDashboard() {
               <ListItemText primary={item.label} />
             </ListItemButton>
           ))}
+          {showDownload && (
+            <ListItemButton
+              component="a"
+              href={appDownloadUrl}
+              download
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                color: "white",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.15)",
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                <GetAppIcon />
+              </ListItemIcon>
+              <ListItemText primary="Download App" />
+            </ListItemButton>
+          )}
           <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", my: 1 }} />
           <ListItemButton
             onClick={handleLogout}
@@ -570,6 +594,17 @@ export default function AgentDashboard() {
                   {user?.name}
                 </Typography>
               </Stack>
+
+              <DownloadAppButton
+                variant="outlined"
+                size="small"
+                sx={{
+                  display: { xs: "none", sm: "inline-flex" },
+                  color: "white",
+                  borderColor: "rgba(255,255,255,0.45)",
+                  "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,0.1)" },
+                }}
+              />
 
               {/* Notification Bell */}
               <IconButton

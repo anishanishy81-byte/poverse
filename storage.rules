@@ -1,6 +1,12 @@
-rules_version = '2';
+﻿rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // APK downloads (public read, no public write)
+    match /app-downloads/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Profile pictures - anyone can read, authenticated users can write their own
     match /profile-pictures/{userId}/{allPaths=**} {
       allow read: if true;
@@ -25,8 +31,14 @@ service firebase.storage {
       allow write: if true;
     }
     
-    // Attendance selfies
+    // Attendance selfies (legacy path)
     match /attendance-selfies/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Attendance folder (used by check-in selfies)
+    match /attendance/{userId}/{allPaths=**} {
       allow read: if true;
       allow write: if true;
     }

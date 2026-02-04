@@ -31,7 +31,10 @@ export interface Company {
   email?: string;
   website?: string;
   description?: string;
+  industry?: string;
   userLimit: number;
+  adminLimit: number;
+  agentLimit: number;
   adminCount: number;
   agentCount: number;
   createdAt: string;

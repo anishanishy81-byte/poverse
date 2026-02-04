@@ -97,7 +97,16 @@ export const validateSession = async (userId: string): Promise<{
   const storedToken = localStorage.getItem("sessionToken");
   const storedUserId = localStorage.getItem("sessionUserId");
   
+  // If no token stored but user is in Zustand state, 
+  // this might be a hydration issue - give benefit of doubt briefly
   if (!storedToken || !storedUserId) {
+    // Check if this is a fresh page load (within 5 seconds)
+    const lastValidation = sessionStorage.getItem("lastSessionValidation");
+    const now = Date.now();
+    if (lastValidation && (now - parseInt(lastValidation)) < 5000) {
+      // Recently validated, likely a navigation/refresh issue
+      return { valid: true };
+    }
     return { valid: false, reason: "No session found" };
   }
   
@@ -111,6 +120,8 @@ export const validateSession = async (userId: string): Promise<{
     const snapshot = await get(sessionRef);
     
     if (!snapshot.exists()) {
+      // Session might not exist in DB yet (race condition on login)
+      // or was cleared - but if we have local token, re-create it
       return { valid: false, reason: "Session not found in database" };
     }
     
@@ -124,10 +135,14 @@ export const validateSession = async (userId: string): Promise<{
       };
     }
     
+    // Mark successful validation
+    sessionStorage.setItem("lastSessionValidation", Date.now().toString());
+    
     return { valid: true };
   } catch (error) {
     console.error("Error validating session:", error);
-    return { valid: false, reason: "Error validating session" };
+    // Network error - don't log out the user
+    return { valid: true };
   }
 };
 
@@ -146,19 +161,30 @@ export const subscribeToSessionChanges = (
   }
   
   const sessionRef = ref(realtimeDb, `${SESSIONS_PATH}/${userId}`);
+  let isFirstLoad = true;
   
   const unsubscribe = onValue(sessionRef, (snapshot) => {
+    // Skip the first callback - this is the initial data load
+    if (isFirstLoad) {
+      isFirstLoad = false;
+      return;
+    }
+    
     if (!snapshot.exists()) {
       onSessionInvalid("Session was terminated");
       return;
     }
     
     const sessionData = snapshot.val() as SessionData;
+    const currentStoredToken = localStorage.getItem("sessionToken");
     
     // If the session token changed, this device was logged out
-    if (sessionData.sessionToken !== storedToken) {
+    if (sessionData.sessionToken !== currentStoredToken) {
       onSessionInvalid(`Your account was logged in on another device (${sessionData.deviceInfo})`);
     }
+  }, (error) => {
+    // Handle errors silently - don't log out on network issues
+    console.error("Session subscription error:", error);
   });
   
   return () => off(sessionRef);

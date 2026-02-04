@@ -1,5 +1,6 @@
 export { 
   useAppStore, 
+  useHasHydrated,
   useIsDarkMode, 
   useIsAuthenticated, 
   useUser, 

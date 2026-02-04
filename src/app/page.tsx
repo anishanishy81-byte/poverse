@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 import {
   Container,
   Typography,
@@ -12,12 +14,11 @@ import {
   Grid2 as Grid,
   AppBar,
   Toolbar,
-  Avatar,
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Rating,
   Chip,
+  Divider,
 } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import AssignmentTurnedInIcon from "@mui/icons-material/AssignmentTurnedIn";
@@ -27,14 +28,18 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import StarIcon from "@mui/icons-material/Star";
 import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
 import CloudDoneIcon from "@mui/icons-material/CloudDone";
-import SupportAgentIcon from "@mui/icons-material/SupportAgent";
-import AndroidIcon from "@mui/icons-material/Android";
+import ShieldIcon from "@mui/icons-material/Shield";
+import AutoGraphIcon from "@mui/icons-material/AutoGraph";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { Sora, Manrope } from "next/font/google";
+import { isNativeApp } from "@/lib/platform";
+
+const sora = Sora({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
+const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 // Motion components
 const MotionBox = motion.create(Box);
@@ -43,79 +48,70 @@ const MotionCard = motion.create(Card);
 
 // Animation variants
 const fadeInUp = {
-  hidden: { opacity: 0, y: 60, filter: "blur(10px)" },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
+  hidden: { opacity: 0, y: 40, filter: "blur(8px)" },
+  visible: {
+    opacity: 1,
+    y: 0,
     filter: "blur(0px)",
-    transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const }
-  }
+    transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] as const },
+  },
 };
 
 const fadeIn = {
   hidden: { opacity: 0, filter: "blur(8px)" },
-  visible: { 
-    opacity: 1, 
+  visible: {
+    opacity: 1,
     filter: "blur(0px)",
-    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }
-  }
+    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const },
+  },
 };
 
 const staggerContainer = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.15, delayChildren: 0.2 }
-  }
+    transition: { staggerChildren: 0.12, delayChildren: 0.15 },
+  },
 };
 
-const features = [
+const pillars = [
   {
-    icon: <LocationOnIcon sx={{ fontSize: 48 }} />,
-    title: "Live GPS Tracking",
-    description: "Track your marketing agents in real-time across all cities with precise location updates.",
+    icon: <LocationOnIcon sx={{ fontSize: 28 }} />,
+    title: "Live Ops Map",
+    description: "See every field agent and visit in real time with precision tracking and route history.",
   },
   {
-    icon: <AssignmentTurnedInIcon sx={{ fontSize: 48 }} />,
-    title: "Attendance Management",
-    description: "Automated check-in/check-out with geo-fencing and photo verification.",
+    icon: <AssignmentTurnedInIcon sx={{ fontSize: 28 }} />,
+    title: "Verified Attendance",
+    description: "Geo-fenced check-in/out with selfie verification and audit-ready logs.",
   },
   {
-    icon: <TrackChangesIcon sx={{ fontSize: 48 }} />,
-    title: "Target Tracking",
-    description: "Set, monitor, and achieve sales targets with real-time progress dashboards.",
+    icon: <TrackChangesIcon sx={{ fontSize: 28 }} />,
+    title: "Target Intelligence",
+    description: "Smart targets with outcomes, follow-ups, and performance insights in one view.",
   },
   {
-    icon: <GroupsIcon sx={{ fontSize: 48 }} />,
-    title: "Team Management",
-    description: "Organize agents by city, region, or team with hierarchical access control.",
+    icon: <NotificationsActiveIcon sx={{ fontSize: 28 }} />,
+    title: "Instant Alerts",
+    description: "Push alerts for deadlines, escalations, and critical field events.",
   },
   {
-    icon: <BarChartIcon sx={{ fontSize: 48 }} />,
-    title: "Performance Analytics",
-    description: "Comprehensive reports and insights to optimize your field operations.",
+    icon: <AutoGraphIcon sx={{ fontSize: 28 }} />,
+    title: "Executive Analytics",
+    description: "Leaderboards, heatmaps, and conversion data that drive better decisions.",
   },
   {
-    icon: <NotificationsActiveIcon sx={{ fontSize: 48 }} />,
-    title: "Smart Notifications",
-    description: "Instant alerts for attendance, target achievements, and important updates.",
+    icon: <ShieldIcon sx={{ fontSize: 28 }} />,
+    title: "Secure by Design",
+    description: "Enterprise-grade encryption with granular access control and compliance-ready storage.",
   },
 ];
 
-const benefits = [
-  "Manage 1000+ agents across multiple cities",
-  "Real-time location tracking with route history",
-  "Automated daily attendance reports",
-  "Custom target setting for individuals & teams",
-  "Expense tracking and reimbursement",
-  "Offline mode for low connectivity areas",
-];
-
-const stats = [
-  { value: "500+", label: "Companies Trust Us", description: "across industries" },
-  { value: "50,000+", label: "Active Field Agents", description: "tracked daily" },
-  { value: "99.9%", label: "Uptime Guarantee", description: "reliable service" },
-  { value: "4.8★", label: "Customer Rating", description: "on app stores" },
+const highlights = [
+  { value: "500+", label: "Companies" },
+  { value: "50,000+", label: "Field Agents" },
+  { value: "99.9%", label: "Uptime" },
+  { value: "4.8?", label: "Customer Rating" },
 ];
 
 const testimonials = [
@@ -123,675 +119,523 @@ const testimonials = [
     name: "Rajesh Kumar",
     role: "Sales Director",
     company: "ABC Enterprises",
-    content: "PO-VERSE transformed how we manage our 200+ field agents. Real-time tracking and automated attendance saved us 40% in operational costs.",
-    rating: 5,
+    content:
+      "PO-VERSE replaced our spreadsheets overnight. The live map alone saved us hours every day.",
   },
   {
     name: "Priya Sharma",
     role: "Operations Manager",
     company: "XYZ Marketing",
-    content: "The target tracking feature is a game-changer. Our team's productivity increased by 60% within the first month of using PO-VERSE.",
-    rating: 5,
+    content:
+      "We finally have a single source of truth for attendance, targets, and visits. The team loves it.",
   },
   {
     name: "Amit Patel",
     role: "CEO",
     company: "FastTrack Solutions",
-    content: "Best field force management tool we've used. The offline mode works perfectly for our agents in remote areas.",
-    rating: 5,
-  },
-];
-
-const useCases = [
-  {
-    title: "FMCG & Retail",
-    description: "Track merchandisers, manage store visits, and monitor product placements across thousands of retail outlets.",
-  },
-  {
-    title: "Pharma & Healthcare",
-    description: "Manage medical representatives, track doctor visits, and ensure compliance with call schedules.",
-  },
-  {
-    title: "Insurance & Banking",
-    description: "Monitor field agents, track customer meetings, and manage policy sales targets efficiently.",
-  },
-  {
-    title: "Telecom & Utilities",
-    description: "Manage field technicians, track service calls, and optimize route planning for installations.",
+    content:
+      "Our field conversion rate jumped within a month. The dashboards show exactly where to focus.",
   },
 ];
 
 const faqs = [
   {
-    question: "What is PO-VERSE?",
-    answer: "PO-VERSE is a comprehensive field force management platform that helps businesses track, manage, and optimize their marketing agents and field teams across multiple cities in real-time.",
+    question: "Is PO-VERSE built for large teams?",
+    answer:
+      "Yes. The platform is designed to scale across cities, teams, and regions with role-based access and analytics.",
   },
   {
-    question: "How does the GPS tracking work?",
-    answer: "Our GPS tracking uses advanced location technology with battery optimization. Agents simply check in via the mobile app, and managers can view real-time locations, route history, and time spent at each location.",
+    question: "Does it work offline?",
+    answer:
+      "Absolutely. Agents can work offline, log visits, and sync automatically once connectivity returns.",
   },
   {
-    question: "Can PO-VERSE work without internet?",
-    answer: "Yes! PO-VERSE features a robust offline mode. Agents can mark attendance, log visits, and record activities even without internet. Data syncs automatically when connection is restored.",
+    question: "How secure is location data?",
+    answer:
+      "We use secure storage, encrypted traffic, and granular access controls to protect location and customer data.",
   },
   {
-    question: "Is my data secure?",
-    answer: "Absolutely. We use enterprise-grade encryption, secure cloud infrastructure, and comply with global data protection standards. Your data is backed up daily and never shared with third parties.",
-  },
-  {
-    question: "How quickly can we get started?",
-    answer: "You can start within minutes! Sign up, add your team members, and they can begin using the mobile app immediately. Our onboarding team provides free setup assistance for enterprise clients.",
-  },
-  {
-    question: "What kind of support do you offer?",
-    answer: "We provide 24/7 customer support via chat, email, and phone. Enterprise clients get dedicated account managers and priority support with guaranteed response times.",
+    question: "Can we start quickly?",
+    answer:
+      "You can be live in days, not weeks. Our onboarding team helps you move from setup to rollout fast.",
   },
 ];
 
 export default function LandingPage() {
+  const router = useRouter();
+  const nativeApp = isNativeApp();
+  const headingFont = sora.style.fontFamily;
+  const bodyFont = manrope.style.fontFamily;
+
+  useEffect(() => {
+    if (nativeApp) {
+      router.replace("/login");
+    }
+  }, [nativeApp, router]);
+
+  if (nativeApp) {
+    return (
+      <Box sx={{ minHeight: "100vh", bgcolor: "#070a14" }} />
+    );
+  }
+
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "#0a0a0f", overflow: "hidden" }}>
-      {/* Fixed Background with blur */}
+    <Box
+      sx={{
+        minHeight: "100vh",
+        bgcolor: "#070a14",
+        color: "white",
+        fontFamily: bodyFont,
+        position: "relative",
+        overflow: "hidden",
+        "--accent": "#1bd4c8",
+        "--accent-2": "#47a3ff",
+        "--accent-3": "#ffb457",
+      }}
+    >
+      {/* Atmospheric background */}
       <Box
         sx={{
           position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
+          inset: 0,
           zIndex: 0,
+          background:
+            "radial-gradient(1200px 600px at 15% 0%, rgba(27,212,200,0.12), transparent 70%), radial-gradient(900px 500px at 90% 15%, rgba(71,163,255,0.14), transparent 70%), radial-gradient(800px 500px at 40% 90%, rgba(255,180,87,0.12), transparent 70%), #070a14",
+          "&::after": {
+            content: "\"\"",
+            position: "absolute",
+            inset: 0,
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px)",
+            backgroundSize: "48px 48px",
+            maskImage:
+              "radial-gradient(circle at 50% 0%, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 35%, rgba(0,0,0,0.15) 70%, transparent 100%)",
+          },
         }}
-      >
-        {/* Background Image */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: "-5%",
-            left: "-5%",
-            right: "-5%",
-            bottom: "-5%",
-            backgroundImage: "url(/bg.png)",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            backgroundRepeat: "no-repeat",
-            filter: "blur(2px)",
-          }}
-        />
-        {/* Overlay - reduced opacity to show bg better */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "linear-gradient(180deg, rgba(10,10,15,0.6) 0%, rgba(20,10,40,0.7) 50%, rgba(10,10,15,0.8) 100%)",
-          }}
-        />
-      </Box>
+      />
 
       {/* Navigation */}
-      <AppBar 
-        position="fixed" 
+      <AppBar
+        position="sticky"
         elevation={0}
-        sx={{ 
-          background: "rgba(10,10,15,0.8)",
-          backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
+        sx={{
+          background: "rgba(7,10,20,0.65)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          backdropFilter: "blur(16px)",
         }}
       >
-        <Toolbar sx={{ justifyContent: "space-between", py: { xs: 0.5, md: 1 }, px: { xs: 1, md: 2 }, minHeight: { xs: 56, md: 64 } }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, md: 2 } }}>
-            <Image
-              src="/logo.png"
-              alt="PO-VERSE Logo"
-              width={36}
-              height={36}
-              style={{ borderRadius: 8 }}
-            />
-            <Typography 
-              variant="h6" 
-              sx={{ 
+        <Toolbar sx={{ py: { xs: 0.5, md: 1 }, px: { xs: 1.5, md: 3 } }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                p: 0.5,
+                background: "linear-gradient(135deg, rgba(27,212,200,0.3), rgba(71,163,255,0.3))",
+                display: "grid",
+                placeItems: "center",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}
+            >
+              <Image src="/logo.png" alt="PO-VERSE Logo" width={24} height={24} />
+            </Box>
+            <Typography
+              variant="h6"
+              sx={{
+                fontFamily: headingFont,
                 fontWeight: 700,
-                fontSize: { xs: '1rem', md: '1.25rem' },
-                background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)",
-                backgroundClip: "text",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                display: { xs: 'none', sm: 'block' },
+                letterSpacing: "0.02em",
+                display: { xs: "none", sm: "block" },
               }}
             >
               PO-VERSE
             </Typography>
           </Box>
-          <Button
-            component={Link}
-            href="/login"
-            variant="contained"
-            size="small"
-            sx={{
-              background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)",
-              color: "white",
-              px: { xs: 2, md: 3 },
-              py: { xs: 0.75, md: 1 },
-              borderRadius: 2,
-              fontWeight: 600,
-              fontSize: { xs: '0.875rem', md: '1rem' },
-              textTransform: "none",
-              boxShadow: "0 4px 20px rgba(168,85,247,0.4)",
-              "&:hover": {
-                background: "linear-gradient(135deg, #9333ea 0%, #4f46e5 100%)",
-                boxShadow: "0 6px 30px rgba(168,85,247,0.5)",
-              },
-            }}
-          >
-            Login
-          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Button
+              component={Link}
+              href="/login"
+              variant="outlined"
+              size="small"
+              sx={{
+                color: "white",
+                borderColor: "rgba(255,255,255,0.2)",
+                textTransform: "none",
+                borderRadius: 2,
+                px: 2.5,
+                "&:hover": { borderColor: "rgba(255,255,255,0.5)", bgcolor: "rgba(255,255,255,0.05)" },
+              }}
+            >
+              Sign In
+            </Button>
+            <Button
+              component={Link}
+              href="/login"
+              variant="contained"
+              size="small"
+              sx={{
+                background: "linear-gradient(135deg, var(--accent), var(--accent-2))",
+                color: "#071118",
+                textTransform: "none",
+                fontWeight: 700,
+                borderRadius: 2,
+                px: 2.5,
+                boxShadow: "0 10px 30px rgba(27,212,200,0.35)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #27e0d3, #5bb0ff)",
+                  boxShadow: "0 14px 40px rgba(27,212,200,0.45)",
+                },
+              }}
+            >
+              Get Started
+            </Button>
+          </Stack>
         </Toolbar>
       </AppBar>
 
       {/* Content */}
       <Box sx={{ position: "relative", zIndex: 1 }}>
-        {/* Hero Section */}
-        <Box
-          sx={{
-            minHeight: "100vh",
-            display: "flex",
-            alignItems: "center",
-            pt: { xs: 12, md: 10 },
-            pb: { xs: 6, md: 12 },
-            px: { xs: 2, md: 0 },
-          }}
-        >
+        {/* Hero */}
+        <Box sx={{ pt: { xs: 8, md: 12 }, pb: { xs: 8, md: 12 } }}>
           <Container maxWidth="lg">
-            <Stack spacing={{ xs: 2, md: 4 }} alignItems="center" textAlign="center">
-              <MotionBox
-                initial="hidden"
-                animate="visible"
-                variants={fadeIn}
-                sx={{ mb: { xs: 1, md: 2 } }}
-              >
-                <Box
-                  sx={{
-                    width: { xs: 80, sm: 100, md: 120 },
-                    height: { xs: 80, sm: 100, md: 120 },
-                    position: 'relative',
-                  }}
-                >
-                  <Image
-                    src="/logo.png"
-                    alt="PO-VERSE Logo"
-                    fill
-                    style={{ borderRadius: 24, objectFit: 'contain' }}
-                  />
-                </Box>
-              </MotionBox>
-              
-              <MotionTypography
-                variant="h1"
-                initial="hidden"
-                animate="visible"
-                variants={fadeInUp}
-                sx={{
-                  fontSize: { xs: "1.75rem", sm: "2.5rem", md: "3.5rem", lg: "4.5rem" },
-                  fontWeight: 800,
-                  color: "white",
-                  lineHeight: 1.2,
-                  textShadow: "0 4px 30px rgba(168,85,247,0.3)",
-                  px: { xs: 1, md: 0 },
-                }}
-              >
-                Manage Your
-                <Box 
-                  component="span" 
-                  sx={{ 
-                    display: "block",
-                    background: "linear-gradient(135deg, #a855f7 0%, #6366f1 50%, #22d3ee 100%)",
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Marketing Agents
-                </Box>
-                Across All Cities
-              </MotionTypography>
-
-              <MotionTypography
-                variant="h5"
-                initial="hidden"
-                animate="visible"
-                variants={fadeInUp}
-                sx={{
-                  maxWidth: 700,
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: { xs: "0.9rem", sm: "1rem", md: "1.25rem" },
-                  lineHeight: 1.6,
-                  px: { xs: 2, md: 0 },
-                }}
-              >
-                The ultimate field force management platform. Track attendance, 
-                monitor live locations, set targets, and boost productivity — 
-                all from one powerful dashboard.
-              </MotionTypography>
-
-              <MotionBox
-                initial="hidden"
-                animate="visible"
-                variants={fadeInUp}
-              >
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 2 }}>
-                  <Button
-                    component={Link}
-                    href="/login"
-                    variant="contained"
-                    size="large"
-                    sx={{
-                      background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)",
-                      color: "white",
-                      px: { xs: 3, md: 5 },
-                      py: { xs: 1.5, md: 2 },
-                      fontSize: { xs: "0.95rem", md: "1.1rem" },
-                      borderRadius: 3,
-                      fontWeight: 600,
-                      textTransform: "none",
-                      boxShadow: "0 8px 30px rgba(168,85,247,0.4)",
-                      width: { xs: "100%", sm: "auto" },
-                      "&:hover": {
-                        background: "linear-gradient(135deg, #9333ea 0%, #4f46e5 100%)",
-                        transform: "translateY(-2px)",
-                        boxShadow: "0 12px 40px rgba(168,85,247,0.5)",
-                      },
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    Get Started Free
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    size="large"
-                    sx={{
-                      borderColor: "rgba(168,85,247,0.5)",
-                      color: "white",
-                      px: { xs: 3, md: 5 },
-                      py: { xs: 1.5, md: 2 },
-                      fontSize: { xs: "0.95rem", md: "1.1rem" },
-                      borderRadius: 3,
-                      fontWeight: 600,
-                      textTransform: "none",
-                      backdropFilter: "blur(10px)",
-                      width: { xs: "100%", sm: "auto" },
-                      "&:hover": {
-                        borderColor: "#a855f7",
-                        bgcolor: "rgba(168,85,247,0.1)",
-                      },
-                    }}
-                  >
-                    Watch Demo
-                  </Button>
-                </Stack>
-              </MotionBox>
-            </Stack>
-          </Container>
-        </Box>
-
-        {/* Features Section */}
-        <Box sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="lg">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
-              sx={{ textAlign: "center", mb: { xs: 4, md: 8 } }}
-            >
-              <Typography
-                variant="h2"
-                sx={{
-                  fontWeight: 700,
-                  color: "white",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "3rem" },
-                  mb: 2,
-                }}
-              >
-                Everything You Need to
-                <Box 
-                  component="span" 
-                  sx={{ 
-                    display: "block",
-                    background: "linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)",
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Manage Field Teams
-                </Box>
-              </Typography>
-              <Typography 
-                sx={{ 
-                  color: "rgba(255,255,255,0.6)", 
-                  maxWidth: 600, 
-                  mx: "auto",
-                  fontSize: { xs: "0.9rem", md: "1.1rem" },
-                  px: { xs: 1, md: 0 },
-                }}
-              >
-                Powerful tools designed for modern field force management
-              </Typography>
-            </MotionBox>
-
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
-              variants={staggerContainer}
-            >
-              <Grid container spacing={{ xs: 2, md: 3 }} justifyContent="center">
-                {features.map((feature, index) => (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
-                    <MotionCard
-                      variants={fadeInUp}
-                      sx={{
-                        height: "100%",
-                        background: "rgba(255,255,255,0.03)",
-                        backdropFilter: "blur(20px)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: { xs: 2, md: 4 },
-                        textAlign: "center",
-                        transition: "all 0.4s ease",
-                        "&:hover": {
-                          transform: { xs: "none", md: "translateY(-8px)" },
-                          background: "rgba(168,85,247,0.08)",
-                          borderColor: "rgba(168,85,247,0.3)",
-                          boxShadow: "0 20px 40px rgba(168,85,247,0.2)",
-                        },
-                      }}
-                    >
-                      <CardContent sx={{ p: { xs: 2.5, md: 4 }, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <Box 
-                          sx={{ 
-                            color: "#a855f7", 
-                            mb: 2,
-                            p: { xs: 1.5, md: 2 },
-                            display: "inline-flex",
-                            background: "rgba(168,85,247,0.1)",
-                            borderRadius: 2,
-                          }}
-                        >
-                          {feature.icon}
-                        </Box>
-                        <Typography 
-                          variant="h6" 
-                          gutterBottom 
-                          sx={{ color: "white", fontWeight: 600, fontSize: { xs: "1rem", md: "1.25rem" } }}
-                        >
-                          {feature.title}
-                        </Typography>
-                        <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: { xs: "0.875rem", md: "1rem" } }}>
-                          {feature.description}
-                        </Typography>
-                      </CardContent>
-                    </MotionCard>
-                  </Grid>
-                ))}
-              </Grid>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* Benefits Section */}
-        <Box sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="lg">
-            <Grid container spacing={{ xs: 4, md: 6 }} alignItems="center" justifyContent="center">
+            <Grid container spacing={{ xs: 4, md: 6 }} alignItems="center">
               <Grid size={{ xs: 12, md: 6 }}>
-                <MotionBox
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true, amount: 0.3 }}
-                  variants={fadeInUp}
-                  sx={{ textAlign: { xs: "center", md: "left" } }}
-                >
-                  <Typography
-                    variant="h3"
-                    sx={{
-                      fontWeight: 700,
-                      color: "white",
-                      fontSize: { xs: "1.5rem", sm: "1.75rem", md: "2.5rem" },
-                      mb: { xs: 2, md: 3 },
-                    }}
-                  >
-                    Why Companies Choose
-                    <Box 
-                      component="span" 
-                      sx={{ 
-                        display: "block",
-                        background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)",
-                        backgroundClip: "text",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
+                <Stack spacing={{ xs: 2, md: 3 }}>
+                  <MotionBox initial="hidden" animate="visible" variants={fadeIn}>
+                    <Chip
+                      label="Premium Field Force Platform"
+                      sx={{
+                        bgcolor: "rgba(27,212,200,0.15)",
+                        color: "white",
+                        border: "1px solid rgba(27,212,200,0.3)",
+                        fontWeight: 600,
+                        px: 1.5,
                       }}
-                    >
-                      PO-VERSE?
-                    </Box>
-                  </Typography>
-                  <Typography 
-                    sx={{ 
-                      color: "rgba(255,255,255,0.6)", 
-                      mb: { xs: 3, md: 4 },
-                      fontSize: { xs: "0.9rem", md: "1.1rem" },
-                      lineHeight: 1.7,
-                      maxWidth: { xs: "100%", md: "none" },
-                      mx: { xs: "auto", md: 0 },
+                    />
+                  </MotionBox>
+                  <MotionTypography
+                    variant="h1"
+                    initial="hidden"
+                    animate="visible"
+                    variants={fadeInUp}
+                    sx={{
+                      fontFamily: headingFont,
+                      fontWeight: 700,
+                      fontSize: { xs: "2rem", sm: "2.6rem", md: "3.5rem", lg: "4.25rem" },
+                      lineHeight: 1.1,
+                      letterSpacing: "-0.02em",
                     }}
                   >
-                    Join hundreds of companies that trust PO-VERSE to manage their 
-                    field marketing teams efficiently. From startups to enterprises, 
-                    we scale with your needs.
-                  </Typography>
-                </MotionBox>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }} sx={{ display: "flex", justifyContent: "center" }}>
-                <MotionBox
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true, amount: 0.1 }}
-                  variants={staggerContainer}
-                  sx={{ width: "100%", maxWidth: { xs: 400, md: "100%" } }}
-                >
-                  <Stack spacing={{ xs: 1.5, md: 2 }} alignItems="center">
-                    {benefits.map((benefit, index) => (
-                      <MotionBox
-                        key={index}
-                        variants={fadeInUp}
+                    Orchestrate
+                    <Box component="span" sx={{ display: "block", color: "var(--accent)" }}>
+                      Elite Field Teams
+                    </Box>
+                    With Live Intelligence
+                  </MotionTypography>
+                  <MotionTypography
+                    variant="h6"
+                    initial="hidden"
+                    animate="visible"
+                    variants={fadeInUp}
+                    sx={{
+                      color: "rgba(255,255,255,0.72)",
+                      fontSize: { xs: "0.95rem", sm: "1.05rem", md: "1.15rem" },
+                      lineHeight: 1.7,
+                      maxWidth: 520,
+                    }}
+                  >
+                    PO-VERSE turns field operations into a real-time command center.
+                    Track attendance, optimize routes, and accelerate conversions across every city.
+                  </MotionTypography>
+                  <MotionBox initial="hidden" animate="visible" variants={fadeInUp}>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <Button
+                        component={Link}
+                        href="/login"
+                        variant="contained"
+                        size="large"
                         sx={{
-                          p: { xs: 2, md: 2.5 },
-                          background: "rgba(255,255,255,0.03)",
-                          backdropFilter: "blur(10px)",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: 2,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 2,
-                          width: "100%",
-                          transition: "all 0.3s ease",
+                          background: "linear-gradient(135deg, var(--accent), var(--accent-2))",
+                          color: "#071118",
+                          textTransform: "none",
+                          fontWeight: 700,
+                          borderRadius: 3,
+                          px: 4,
+                          py: 1.4,
+                          boxShadow: "0 18px 45px rgba(27,212,200,0.35)",
                           "&:hover": {
-                            background: "rgba(168,85,247,0.08)",
-                            borderColor: "rgba(168,85,247,0.3)",
+                            background: "linear-gradient(135deg, #27e0d3, #5bb0ff)",
+                            transform: "translateY(-2px)",
+                            boxShadow: "0 22px 55px rgba(27,212,200,0.45)",
+                          },
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        Launch Dashboard
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="large"
+                        sx={{
+                          borderColor: "rgba(255,255,255,0.2)",
+                          color: "white",
+                          textTransform: "none",
+                          fontWeight: 600,
+                          borderRadius: 3,
+                          px: 4,
+                          py: 1.4,
+                          "&:hover": {
+                            borderColor: "rgba(255,255,255,0.6)",
+                            bgcolor: "rgba(255,255,255,0.04)",
                           },
                         }}
                       >
-                        <Box
+                        Request Demo
+                      </Button>
+                    </Stack>
+                  </MotionBox>
+                  <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                    <Chip
+                      icon={<CheckCircleIcon sx={{ fontSize: 18, color: "var(--accent)" }} />}
+                      label="SOC 2 Ready"
+                      sx={{ bgcolor: "rgba(255,255,255,0.06)", color: "white" }}
+                    />
+                    <Chip
+                      icon={<CheckCircleIcon sx={{ fontSize: 18, color: "var(--accent-3)" }} />}
+                      label="GDPR Compliant"
+                      sx={{ bgcolor: "rgba(255,255,255,0.06)", color: "white" }}
+                    />
+                    <Chip
+                      icon={<CloudDoneIcon sx={{ fontSize: 18, color: "var(--accent-2)" }} />}
+                      label="99.9% Uptime"
+                      sx={{ bgcolor: "rgba(255,255,255,0.06)", color: "white" }}
+                    />
+                  </Stack>
+                </Stack>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <MotionBox initial="hidden" animate="visible" variants={fadeInUp}>
+                  <Box
+                    sx={{
+                      position: "relative",
+                      borderRadius: 6,
+                      p: { xs: 2, sm: 3 },
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background:
+                        "linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+                      boxShadow: "0 30px 60px rgba(0,0,0,0.4)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: -60,
+                        right: -80,
+                        width: 240,
+                        height: 240,
+                        background: "radial-gradient(circle, rgba(27,212,200,0.35), transparent 70%)",
+                      }}
+                    />
+                    <Stack spacing={2}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          bgcolor: "rgba(8,14,24,0.7)",
+                          borderRadius: 3,
+                          px: 2,
+                          py: 1.5,
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        <Stack>
+                          <Typography sx={{ fontWeight: 600, fontFamily: headingFont }}>
+                            Live Field Overview
+                          </Typography>
+                          <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: "0.85rem" }}>
+                            126 agents online
+                          </Typography>
+                        </Stack>
+                        <Chip
+                          label="Real-time"
                           sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: "linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)",
-                            flexShrink: 0,
-                            display: { xs: "none", md: "block" },
+                            bgcolor: "rgba(27,212,200,0.2)",
+                            color: "white",
+                            fontWeight: 600,
                           }}
                         />
-                        <Typography sx={{ color: "rgba(255,255,255,0.85)", fontSize: { xs: "0.9rem", md: "1rem" }, textAlign: "center" }}>
-                          {benefit}
-                        </Typography>
-                      </MotionBox>
-                    ))}
-                  </Stack>
+                      </Box>
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <Card
+                            sx={{
+                              height: "100%",
+                              bgcolor: "rgba(10,16,28,0.8)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                              borderRadius: 3,
+                            }}
+                          >
+                            <CardContent>
+                              <Stack spacing={1}>
+                                <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: "0.85rem" }}>
+                                  Attendance
+                                </Typography>
+                                <Typography sx={{ fontFamily: headingFont, fontSize: "1.6rem", fontWeight: 700 }}>
+                                  93%
+                                </Typography>
+                                <Typography sx={{ color: "var(--accent)", fontSize: "0.85rem" }}>
+                                  +12% vs last week
+                                </Typography>
+                              </Stack>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <Card
+                            sx={{
+                              height: "100%",
+                              bgcolor: "rgba(10,16,28,0.8)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                              borderRadius: 3,
+                            }}
+                          >
+                            <CardContent>
+                              <Stack spacing={1}>
+                                <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: "0.85rem" }}>
+                                  Targets Closed
+                                </Typography>
+                                <Typography sx={{ fontFamily: headingFont, fontSize: "1.6rem", fontWeight: 700 }}>
+                                  268
+                                </Typography>
+                                <Typography sx={{ color: "var(--accent-3)", fontSize: "0.85rem" }}>
+                                  18 due today
+                                </Typography>
+                              </Stack>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      </Grid>
+                      <Card
+                        sx={{
+                          bgcolor: "rgba(10,16,28,0.8)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          borderRadius: 3,
+                        }}
+                      >
+                        <CardContent>
+                          <Stack direction="row" spacing={2} alignItems="center">
+                            <Box
+                              sx={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: "50%",
+                                bgcolor: "rgba(71,163,255,0.2)",
+                                display: "grid",
+                                placeItems: "center",
+                              }}
+                            >
+                              <PhoneAndroidIcon sx={{ color: "var(--accent-2)" }} />
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography sx={{ fontWeight: 600 }}>Agent App</Typography>
+                              <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: "0.85rem" }}>
+                                Offline-first tracking and check-ins
+                              </Typography>
+                            </Box>
+                            <Chip
+                              label="Syncing"
+                              sx={{
+                                bgcolor: "rgba(71,163,255,0.18)",
+                                color: "white",
+                                fontWeight: 600,
+                              }}
+                            />
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    </Stack>
+                  </Box>
                 </MotionBox>
               </Grid>
             </Grid>
           </Container>
         </Box>
-
-        {/* Stats Section */}
-        <Box sx={{ py: { xs: 6, md: 10 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="lg">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.2 }}
-              variants={staggerContainer}
-            >
-              <Grid container spacing={{ xs: 2, md: 4 }} justifyContent="center">
-                {stats.map((stat, index) => (
-                  <Grid size={{ xs: 6, md: 3 }} key={index}>
-                    <MotionBox
-                      variants={fadeInUp}
-                      sx={{
-                        textAlign: "center",
-                        p: { xs: 2, md: 4 },
-                        background: "rgba(255,255,255,0.03)",
-                        backdropFilter: "blur(10px)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: { xs: 2, md: 4 },
-                      }}
-                    >
-                      <Typography
-                        variant="h3"
-                        sx={{
-                          fontWeight: 800,
-                          fontSize: { xs: "1.5rem", sm: "2rem", md: "2.5rem" },
-                          background: "linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)",
-                          backgroundClip: "text",
-                          WebkitBackgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                        }}
-                      >
-                        {stat.value}
-                      </Typography>
-                      <Typography
-                        sx={{
-                          color: "white",
-                          fontWeight: 600,
-                          fontSize: { xs: "0.85rem", md: "1rem" },
-                          mt: 1,
-                        }}
-                      >
-                        {stat.label}
-                      </Typography>
-                      <Typography
-                        sx={{
-                          color: "rgba(255,255,255,0.5)",
-                          fontSize: { xs: "0.75rem", md: "0.875rem" },
-                        }}
-                      >
-                        {stat.description}
-                      </Typography>
-                    </MotionBox>
-                  </Grid>
-                ))}
-              </Grid>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* Use Cases Section */}
-        <Box component="section" sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
+        {/* Pillars */}
+        <Box sx={{ py: { xs: 8, md: 12 } }}>
           <Container maxWidth="lg">
             <MotionBox
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true, amount: 0.3 }}
               variants={fadeInUp}
-              sx={{ textAlign: "center", mb: { xs: 4, md: 8 } }}
+              sx={{ textAlign: "center", mb: { xs: 4, md: 6 } }}
             >
               <Typography
-                component="h2"
                 variant="h2"
                 sx={{
+                  fontFamily: headingFont,
                   fontWeight: 700,
-                  color: "white",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "3rem" },
-                  mb: 2,
+                  fontSize: { xs: "1.7rem", sm: "2.2rem", md: "3rem" },
                 }}
               >
-                Trusted Across
-                <Box
-                  component="span"
-                  sx={{
-                    display: "block",
-                    background: "linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)",
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Multiple Industries
-                </Box>
+                The Premium Stack for Field Excellence
               </Typography>
               <Typography
                 sx={{
-                  color: "rgba(255,255,255,0.6)",
-                  maxWidth: 600,
+                  color: "rgba(255,255,255,0.65)",
+                  maxWidth: 640,
                   mx: "auto",
-                  fontSize: { xs: "0.9rem", md: "1.1rem" },
+                  mt: 1.5,
                 }}
               >
-                PO-VERSE powers field teams across diverse industries with tailored solutions
+                Built for leaders who need clarity, speed, and control across distributed teams.
               </Typography>
             </MotionBox>
 
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
-              variants={staggerContainer}
-            >
-              <Grid container spacing={{ xs: 2, md: 3 }} justifyContent="center">
-                {useCases.map((useCase, index) => (
-                  <Grid size={{ xs: 12, sm: 6 }} key={index}>
+            <MotionBox initial="hidden" whileInView="visible" viewport={{ once: true }} variants={staggerContainer}>
+              <Grid container spacing={{ xs: 2, md: 3 }}>
+                {pillars.map((pillar, index) => (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
                     <MotionCard
                       variants={fadeInUp}
                       sx={{
                         height: "100%",
-                        background: "rgba(255,255,255,0.03)",
-                        backdropFilter: "blur(20px)",
+                        background: "rgba(12,18,30,0.7)",
                         border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: { xs: 2, md: 3 },
-                        p: { xs: 2, md: 3 },
+                        borderRadius: 4,
                         transition: "all 0.3s ease",
                         "&:hover": {
-                          background: "rgba(168,85,247,0.08)",
-                          borderColor: "rgba(168,85,247,0.3)",
+                          transform: { xs: "none", md: "translateY(-6px)" },
+                          borderColor: "rgba(27,212,200,0.4)",
+                          boxShadow: "0 20px 40px rgba(0,0,0,0.35)",
                         },
                       }}
                     >
-                      <CardContent sx={{ p: 0 }}>
-                        <Stack direction="row" spacing={2} alignItems="flex-start">
-                          <CheckCircleIcon sx={{ color: "#a855f7", fontSize: 28, mt: 0.5 }} />
-                          <Box>
-                            <Typography
-                              variant="h6"
-                              sx={{ color: "white", fontWeight: 600, fontSize: { xs: "1rem", md: "1.25rem" } }}
-                            >
-                              {useCase.title}
-                            </Typography>
-                            <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: { xs: "0.85rem", md: "0.95rem" }, mt: 1 }}>
-                              {useCase.description}
-                            </Typography>
-                          </Box>
-                        </Stack>
+                      <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+                        <Box
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2.5,
+                            bgcolor: "rgba(27,212,200,0.15)",
+                            display: "grid",
+                            placeItems: "center",
+                            color: "var(--accent)",
+                            mb: 2,
+                          }}
+                        >
+                          {pillar.icon}
+                        </Box>
+                        <Typography sx={{ fontFamily: headingFont, fontWeight: 600, mb: 1 }}>
+                          {pillar.title}
+                        </Typography>
+                        <Typography sx={{ color: "rgba(255,255,255,0.65)", fontSize: "0.95rem" }}>
+                          {pillar.description}
+                        </Typography>
                       </CardContent>
                     </MotionCard>
                   </Grid>
@@ -801,685 +645,296 @@ export default function LandingPage() {
           </Container>
         </Box>
 
-        {/* How It Works Section */}
-        <Box component="section" sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
+        {/* Highlights */}
+        <Box sx={{ py: { xs: 6, md: 8 } }}>
           <Container maxWidth="lg">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
-              sx={{ textAlign: "center", mb: { xs: 4, md: 8 } }}
-            >
-              <Typography
-                component="h2"
-                variant="h2"
-                sx={{
-                  fontWeight: 700,
-                  color: "white",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "3rem" },
-                  mb: 2,
-                }}
-              >
-                Get Started in
-                <Box
-                  component="span"
-                  sx={{
-                    display: "block",
-                    background: "linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)",
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  3 Easy Steps
-                </Box>
-              </Typography>
-            </MotionBox>
-
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
-              variants={staggerContainer}
-            >
-              <Grid container spacing={{ xs: 3, md: 4 }} justifyContent="center">
-                {[
-                  { step: "01", icon: <CloudDoneIcon sx={{ fontSize: 40 }} />, title: "Sign Up & Setup", description: "Create your account in minutes. Add your company details and customize settings." },
-                  { step: "02", icon: <PhoneAndroidIcon sx={{ fontSize: 40 }} />, title: "Add Your Team", description: "Invite field agents via SMS or email. They download the app and start tracking." },
-                  { step: "03", icon: <BarChartIcon sx={{ fontSize: 40 }} />, title: "Track & Optimize", description: "Monitor real-time data, analyze performance, and boost productivity instantly." },
-                ].map((item, index) => (
-                  <Grid size={{ xs: 12, md: 4 }} key={index}>
-                    <MotionBox
-                      variants={fadeInUp}
-                      sx={{
-                        textAlign: "center",
-                        p: { xs: 3, md: 4 },
-                        position: "relative",
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          position: "absolute",
-                          top: 0,
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                          fontSize: { xs: "4rem", md: "6rem" },
-                          fontWeight: 800,
-                          color: "rgba(168,85,247,0.1)",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {item.step}
-                      </Typography>
-                      <Box
-                        sx={{
-                          position: "relative",
-                          zIndex: 1,
-                          pt: { xs: 3, md: 4 },
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            color: "#a855f7",
-                            mb: 2,
-                            p: 2,
-                            display: "inline-flex",
-                            background: "rgba(168,85,247,0.1)",
-                            borderRadius: 3,
-                          }}
-                        >
-                          {item.icon}
-                        </Box>
-                        <Typography
-                          variant="h6"
-                          sx={{ color: "white", fontWeight: 600, mb: 1, fontSize: { xs: "1rem", md: "1.25rem" } }}
-                        >
-                          {item.title}
-                        </Typography>
-                        <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: { xs: "0.85rem", md: "0.95rem" } }}>
-                          {item.description}
-                        </Typography>
-                      </Box>
-                    </MotionBox>
-                  </Grid>
-                ))}
-              </Grid>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* Testimonials Section */}
-        <Box component="section" sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="lg">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
-              sx={{ textAlign: "center", mb: { xs: 4, md: 8 } }}
-            >
-              <Chip
-                label="Customer Reviews"
-                sx={{
-                  mb: 2,
-                  background: "rgba(168,85,247,0.2)",
-                  color: "#a855f7",
-                  fontWeight: 600,
-                }}
-              />
-              <Typography
-                component="h2"
-                variant="h2"
-                sx={{
-                  fontWeight: 700,
-                  color: "white",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "3rem" },
-                  mb: 2,
-                }}
-              >
-                What Our Customers Say
-              </Typography>
-            </MotionBox>
-
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
-              variants={staggerContainer}
-            >
-              <Grid container spacing={{ xs: 2, md: 3 }} justifyContent="center">
-                {testimonials.map((testimonial, index) => (
-                  <Grid size={{ xs: 12, md: 4 }} key={index}>
-                    <MotionCard
-                      variants={fadeInUp}
-                      sx={{
-                        height: "100%",
-                        background: "rgba(255,255,255,0.03)",
-                        backdropFilter: "blur(20px)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: { xs: 2, md: 4 },
-                        transition: "all 0.3s ease",
-                        "&:hover": {
-                          background: "rgba(168,85,247,0.08)",
-                          borderColor: "rgba(168,85,247,0.3)",
-                        },
-                      }}
-                    >
-                      <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
-                        <Rating
-                          value={testimonial.rating}
-                          readOnly
-                          icon={<StarIcon sx={{ color: "#fbbf24" }} />}
-                          emptyIcon={<StarIcon sx={{ color: "rgba(255,255,255,0.2)" }} />}
-                          sx={{ mb: 2 }}
-                        />
-                        <Typography
-                          sx={{
-                            color: "rgba(255,255,255,0.85)",
-                            fontSize: { xs: "0.9rem", md: "1rem" },
-                            fontStyle: "italic",
-                            mb: 3,
-                            lineHeight: 1.7,
-                          }}
-                        >
-                          &ldquo;{testimonial.content}&rdquo;
-                        </Typography>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                          <Avatar
-                            sx={{
-                              bgcolor: "#a855f7",
-                              width: 44,
-                              height: 44,
-                            }}
-                          >
-                            {testimonial.name.charAt(0)}
-                          </Avatar>
-                          <Box>
-                            <Typography sx={{ color: "white", fontWeight: 600, fontSize: "0.95rem" }}>
-                              {testimonial.name}
-                            </Typography>
-                            <Typography sx={{ color: "rgba(255,255,255,0.5)", fontSize: "0.8rem" }}>
-                              {testimonial.role}, {testimonial.company}
-                            </Typography>
-                          </Box>
-                        </Stack>
-                      </CardContent>
-                    </MotionCard>
-                  </Grid>
-                ))}
-              </Grid>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* FAQ Section */}
-        <Box component="section" sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="md">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
-              sx={{ textAlign: "center", mb: { xs: 4, md: 8 } }}
-            >
-              <Typography
-                component="h2"
-                variant="h2"
-                sx={{
-                  fontWeight: 700,
-                  color: "white",
-                  fontSize: { xs: "1.5rem", sm: "2rem", md: "3rem" },
-                  mb: 2,
-                }}
-              >
-                Frequently Asked
-                <Box
-                  component="span"
-                  sx={{
-                    display: "block",
-                    background: "linear-gradient(135deg, #a855f7 0%, #22d3ee 100%)",
-                    backgroundClip: "text",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                  }}
-                >
-                  Questions
-                </Box>
-              </Typography>
-            </MotionBox>
-
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
-              variants={staggerContainer}
-            >
-              <Stack spacing={2}>
-                {faqs.map((faq, index) => (
-                  <MotionBox key={index} variants={fadeInUp}>
-                    <Accordion
-                      sx={{
-                        background: "rgba(255,255,255,0.03)",
-                        backdropFilter: "blur(10px)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: "12px !important",
-                        "&:before": { display: "none" },
-                        "&.Mui-expanded": {
-                          margin: 0,
-                          borderColor: "rgba(168,85,247,0.3)",
-                        },
-                      }}
-                    >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon sx={{ color: "#a855f7" }} />}
-                        sx={{
-                          "& .MuiAccordionSummary-content": { my: 2 },
-                        }}
-                      >
-                        <Typography sx={{ color: "white", fontWeight: 600, fontSize: { xs: "0.95rem", md: "1.1rem" } }}>
-                          {faq.question}
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 0, pb: 3 }}>
-                        <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: { xs: "0.9rem", md: "1rem" }, lineHeight: 1.7 }}>
-                          {faq.answer}
-                        </Typography>
-                      </AccordionDetails>
-                    </Accordion>
-                  </MotionBox>
-                ))}
-              </Stack>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* Trust Badges */}
-        <Box sx={{ py: { xs: 4, md: 8 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="lg">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
-              sx={{ textAlign: "center" }}
-            >
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={{ xs: 3, md: 6 }}
-                justifyContent="center"
-                alignItems="center"
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CheckCircleIcon sx={{ color: "#22c55e" }} />
-                  <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: { xs: "0.85rem", md: "1rem" } }}>
-                    ISO 27001 Certified
-                  </Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <CheckCircleIcon sx={{ color: "#22c55e" }} />
-                  <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: { xs: "0.85rem", md: "1rem" } }}>
-                    GDPR Compliant
-                  </Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <SupportAgentIcon sx={{ color: "#a855f7" }} />
-                  <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: { xs: "0.85rem", md: "1rem" } }}>
-                    24/7 Support
-                  </Typography>
-                </Stack>
-              </Stack>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* Download App Section */}
-        <Box sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="lg">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
-            >
-              <Grid container spacing={{ xs: 4, md: 6 }} alignItems="center">
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Typography
-                    variant="h2"
-                    sx={{
-                      fontWeight: 700,
-                      color: "white",
-                      fontSize: { xs: "1.5rem", sm: "2rem", md: "2.5rem" },
-                      mb: 2,
-                    }}
-                  >
-                    Get the
-                    <Box 
-                      component="span" 
-                      sx={{ 
-                        display: "block",
-                        background: "linear-gradient(135deg, #3ddc84 0%, #00c853 100%)",
-                        backgroundClip: "text",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                      }}
-                    >
-                      Mobile App
-                    </Box>
-                  </Typography>
-                  <Typography 
-                    sx={{ 
-                      color: "rgba(255,255,255,0.7)", 
-                      mb: 4,
-                      fontSize: { xs: "0.95rem", md: "1.1rem" },
-                      lineHeight: 1.7,
-                    }}
-                  >
-                    The PO-VERSE mobile app for field agents is coming soon! 
-                    Mark attendance, track locations, view tasks, and stay connected — 
-                    all from your smartphone.
-                  </Typography>
-                  <Stack spacing={2}>
-                    <Box>
-                      <Button
-                        variant="contained"
-                        size="large"
-                        disabled
-                        startIcon={<AndroidIcon sx={{ fontSize: 28 }} />}
-                        sx={{
-                          background: "linear-gradient(135deg, #3ddc84 0%, #00c853 100%)",
-                          color: "white",
-                          px: 4,
-                          py: 2,
-                          fontSize: "1.1rem",
-                          borderRadius: 3,
-                          fontWeight: 600,
-                          textTransform: "none",
-                          boxShadow: "0 8px 30px rgba(61,220,132,0.3)",
-                          "&.Mui-disabled": {
-                            background: "rgba(61,220,132,0.3)",
-                            color: "rgba(255,255,255,0.7)",
-                          },
-                        }}
-                      >
-                        Coming Soon
-                      </Button>
-                    </Box>
-                    <Typography 
-                      sx={{ 
-                        color: "rgba(255,255,255,0.5)", 
-                        fontSize: "0.85rem",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                      }}
-                    >
-                      <CheckCircleIcon sx={{ fontSize: 16, color: "#3ddc84" }} />
-                      Android app in development
-                    </Typography>
-                  </Stack>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Box
-                    sx={{
-                      position: "relative",
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                    }}
-                  >
-                    {/* Phone mockup */}
-                    <Box
-                      sx={{
-                        width: { xs: 200, md: 280 },
-                        height: { xs: 400, md: 560 },
-                        background: "linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)",
-                        borderRadius: 6,
-                        border: "8px solid #2d2d44",
-                        boxShadow: "0 40px 80px rgba(0,0,0,0.5), 0 0 60px rgba(61,220,132,0.2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        overflow: "hidden",
-                        position: "relative",
-                      }}
-                    >
-                      {/* Phone notch */}
-                      <Box
-                        sx={{
-                          position: "absolute",
-                          top: 8,
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                          width: 80,
-                          height: 24,
-                          background: "#2d2d44",
-                          borderRadius: 10,
-                          zIndex: 10,
-                        }}
-                      />
-                      {/* App screen */}
-                      <Box
-                        sx={{
-                          flex: 1,
-                          background: "linear-gradient(135deg, #667eea 0%, #a855f7 100%)",
-                          m: 1,
-                          mt: 5,
-                          borderRadius: 3,
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          p: 3,
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: 60,
-                            height: 60,
-                            mb: 2,
-                            position: "relative",
-                          }}
-                        >
-                          <Image
-                            src="/logo.png"
-                            alt="PO-VERSE"
-                            fill
-                            style={{ objectFit: "contain", borderRadius: 12 }}
-                          />
-                        </Box>
-                        <Typography
-                          sx={{
-                            color: "white",
-                            fontWeight: 700,
-                            fontSize: { xs: "1rem", md: "1.25rem" },
-                            mb: 1,
-                          }}
-                        >
-                          PO-VERSE
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: "rgba(255,255,255,0.8)",
-                            fontSize: { xs: "0.7rem", md: "0.8rem" },
-                            textAlign: "center",
-                          }}
-                        >
-                          Field Agent App
-                        </Typography>
-                      </Box>
-                    </Box>
-                    {/* Floating elements */}
-                    <Box
-                      sx={{
-                        position: "absolute",
-                        top: "10%",
-                        right: { xs: "5%", md: "10%" },
-                        background: "rgba(61,220,132,0.2)",
-                        backdropFilter: "blur(10px)",
-                        border: "1px solid rgba(61,220,132,0.3)",
-                        borderRadius: 2,
-                        p: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                      }}
-                    >
-                      <LocationOnIcon sx={{ color: "#3ddc84", fontSize: 20 }} />
-                      <Typography sx={{ color: "white", fontSize: "0.8rem", fontWeight: 500 }}>
-                        Live Tracking
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        position: "absolute",
-                        bottom: "15%",
-                        left: { xs: "5%", md: "5%" },
-                        background: "rgba(168,85,247,0.2)",
-                        backdropFilter: "blur(10px)",
-                        border: "1px solid rgba(168,85,247,0.3)",
-                        borderRadius: 2,
-                        p: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                      }}
-                    >
-                      <CheckCircleIcon sx={{ color: "#a855f7", fontSize: 20 }} />
-                      <Typography sx={{ color: "white", fontSize: "0.8rem", fontWeight: 500 }}>
-                        Task Complete
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Grid>
-              </Grid>
-            </MotionBox>
-          </Container>
-        </Box>
-
-        {/* CTA Section */}
-        <Box sx={{ py: { xs: 6, md: 12 }, px: { xs: 2, md: 0 } }}>
-          <Container maxWidth="md">
-            <MotionBox
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeInUp}
+            <Box
               sx={{
-                p: { xs: 3, sm: 4, md: 8 },
-                background: "linear-gradient(135deg, rgba(168,85,247,0.15) 0%, rgba(99,102,241,0.15) 100%)",
-                backdropFilter: "blur(20px)",
-                border: "1px solid rgba(168,85,247,0.2)",
-                borderRadius: { xs: 3, md: 6 },
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, 1fr)" },
+                gap: { xs: 2, md: 3 },
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 4,
+                p: { xs: 2.5, md: 3.5 },
+                background: "rgba(12,18,30,0.6)",
+              }}
+            >
+              {highlights.map((item, index) => (
+                <Box key={index}>
+                  <Typography sx={{ fontFamily: headingFont, fontWeight: 700, fontSize: { xs: "1.4rem", md: "1.8rem" } }}>
+                    {item.value}
+                  </Typography>
+                  <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem" }}>
+                    {item.label}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Container>
+        </Box>
+        {/* Workflow */}
+        <Box sx={{ py: { xs: 8, md: 12 } }}>
+          <Container maxWidth="lg">
+            <Grid container spacing={{ xs: 3, md: 5 }} alignItems="center">
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Typography
+                  variant="h3"
+                  sx={{
+                    fontFamily: headingFont,
+                    fontWeight: 700,
+                    fontSize: { xs: "1.6rem", md: "2.4rem" },
+                    mb: 2,
+                  }}
+                >
+                  A Workflow That Feels Effortless
+                </Typography>
+                <Typography sx={{ color: "rgba(255,255,255,0.65)", mb: 3 }}>
+                  From assignment to completion, every step is built to reduce friction and increase visibility.
+                </Typography>
+                <Stack spacing={2}>
+                  {[
+                    "Assign targets with deadlines and auto reminders",
+                    "Guide agents with live maps and optimized routes",
+                    "Capture outcomes and sync analytics instantly",
+                  ].map((item, index) => (
+                    <Stack key={index} direction="row" spacing={1.5} alignItems="flex-start">
+                      <CheckCircleIcon sx={{ color: "var(--accent)", mt: 0.3 }} />
+                      <Typography sx={{ color: "rgba(255,255,255,0.8)" }}>{item}</Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Grid>
+              <Grid size={{ xs: 12, md: 7 }}>
+                <Box
+                  sx={{
+                    borderRadius: 4,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(12,18,30,0.6)",
+                    p: { xs: 2.5, md: 3.5 },
+                  }}
+                >
+                  <Stack spacing={2}>
+                    {[
+                      { title: "Plan", desc: "Distribute targets with priority and SLAs.", icon: <GroupsIcon /> },
+                      { title: "Execute", desc: "Track attendance, visits, and live routes.", icon: <LocationOnIcon /> },
+                      { title: "Optimize", desc: "Analyze performance and automate follow-ups.", icon: <BarChartIcon /> },
+                    ].map((step, index) => (
+                      <Box key={index} sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                        <Box
+                          sx={{
+                            width: 46,
+                            height: 46,
+                            borderRadius: 2,
+                            bgcolor: "rgba(71,163,255,0.2)",
+                            display: "grid",
+                            placeItems: "center",
+                            color: "var(--accent-2)",
+                          }}
+                        >
+                          {step.icon}
+                        </Box>
+                        <Box>
+                          <Typography sx={{ fontFamily: headingFont, fontWeight: 600 }}>{step.title}</Typography>
+                          <Typography sx={{ color: "rgba(255,255,255,0.65)", fontSize: "0.9rem" }}>
+                            {step.desc}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              </Grid>
+            </Grid>
+          </Container>
+        </Box>
+        {/* Testimonials */}
+        <Box sx={{ py: { xs: 8, md: 12 } }}>
+          <Container maxWidth="lg">
+            <Typography
+              variant="h3"
+              sx={{
+                fontFamily: headingFont,
+                fontWeight: 700,
+                fontSize: { xs: "1.6rem", md: "2.4rem" },
+                textAlign: "center",
+                mb: { xs: 3, md: 5 },
+              }}
+            >
+              Trusted by High-Performance Teams
+            </Typography>
+            <Grid container spacing={{ xs: 2, md: 3 }}>
+              {testimonials.map((testimonial, index) => (
+                <Grid size={{ xs: 12, md: 4 }} key={index}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      background: "rgba(12,18,30,0.7)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 4,
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+                      <Typography sx={{ color: "rgba(255,255,255,0.8)", mb: 3 }}>
+                        “{testimonial.content}”
+                      </Typography>
+                      <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", mb: 2 }} />
+                      <Typography sx={{ fontFamily: headingFont, fontWeight: 600 }}>
+                        {testimonial.name}
+                      </Typography>
+                      <Typography sx={{ color: "rgba(255,255,255,0.6)", fontSize: "0.85rem" }}>
+                        {testimonial.role} · {testimonial.company}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Container>
+        </Box>
+
+        {/* FAQ */}
+        <Box sx={{ py: { xs: 8, md: 12 } }}>
+          <Container maxWidth="md">
+            <Typography
+              variant="h3"
+              sx={{
+                fontFamily: headingFont,
+                fontWeight: 700,
+                fontSize: { xs: "1.6rem", md: "2.4rem" },
+                textAlign: "center",
+                mb: { xs: 3, md: 5 },
+              }}
+            >
+              Questions, Answered
+            </Typography>
+            <Stack spacing={2}>
+              {faqs.map((faq, index) => (
+                <Accordion
+                  key={index}
+                  sx={{
+                    background: "rgba(12,18,30,0.7)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "14px !important",
+                    "&:before": { display: "none" },
+                  }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: "var(--accent)" }} />}>
+                    <Typography sx={{ fontFamily: headingFont, fontWeight: 600 }}>{faq.question}</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Typography sx={{ color: "rgba(255,255,255,0.7)", lineHeight: 1.7 }}>
+                      {faq.answer}
+                    </Typography>
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+            </Stack>
+          </Container>
+        </Box>
+
+        {/* CTA */}
+        <Box sx={{ py: { xs: 8, md: 12 } }}>
+          <Container maxWidth="md">
+            <Box
+              sx={{
+                p: { xs: 3, md: 5 },
+                borderRadius: 4,
+                background: "linear-gradient(135deg, rgba(27,212,200,0.16), rgba(71,163,255,0.16))",
+                border: "1px solid rgba(255,255,255,0.15)",
                 textAlign: "center",
               }}
             >
               <Typography
                 variant="h3"
                 sx={{
+                  fontFamily: headingFont,
                   fontWeight: 700,
-                  color: "white",
-                  fontSize: { xs: "1.25rem", sm: "1.5rem", md: "2.5rem" },
-                  mb: { xs: 1.5, md: 2 },
+                  fontSize: { xs: "1.5rem", md: "2.2rem" },
+                  mb: 1.5,
                 }}
               >
-                Ready to Transform Your Field Operations?
+                Ready to Run Field Operations Like a Premium Brand?
               </Typography>
-              <Typography 
-                sx={{ 
-                  color: "rgba(255,255,255,0.7)", 
-                  maxWidth: 500, 
-                  mx: "auto",
-                  mb: { xs: 3, md: 4 },
-                  fontSize: { xs: "0.9rem", md: "1.1rem" },
-                }}
-              >
-                Start managing your marketing agents smarter today. 
-                No credit card required.
+              <Typography sx={{ color: "rgba(255,255,255,0.7)", mb: 3 }}>
+                Launch PO-VERSE in minutes. No credit card required.
               </Typography>
-              <Button
-                component={Link}
-                href="/login"
-                variant="contained"
-                size="large"
-                sx={{
-                  background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)",
-                  color: "white",
-                  px: { xs: 4, md: 6 },
-                  py: { xs: 1.5, md: 2 },
-                  fontSize: { xs: "0.95rem", md: "1.1rem" },
-                  borderRadius: 3,
-                  fontWeight: 600,
-                  width: { xs: "100%", sm: "auto" },
-                  textTransform: "none",
-                  boxShadow: "0 8px 30px rgba(168,85,247,0.4)",
-                  "&:hover": {
-                    background: "linear-gradient(135deg, #9333ea 0%, #4f46e5 100%)",
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 12px 40px rgba(168,85,247,0.5)",
-                  },
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Start Free Trial
-              </Button>
-            </MotionBox>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="center">
+                <Button
+                  component={Link}
+                  href="/login"
+                  variant="contained"
+                  size="large"
+                  sx={{
+                    background: "linear-gradient(135deg, var(--accent), var(--accent-2))",
+                    color: "#071118",
+                    textTransform: "none",
+                    fontWeight: 700,
+                    borderRadius: 3,
+                    px: 4,
+                    py: 1.4,
+                  }}
+                >
+                  Start Free Trial
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="large"
+                  sx={{
+                    borderColor: "rgba(255,255,255,0.35)",
+                    color: "white",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    borderRadius: 3,
+                    px: 4,
+                    py: 1.4,
+                  }}
+                >
+                  Talk to Sales
+                </Button>
+              </Stack>
+            </Box>
           </Container>
         </Box>
 
         {/* Footer */}
-        <Box 
-          sx={{ 
-            py: { xs: 3, md: 4 }, 
-            textAlign: "center",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            px: { xs: 2, md: 0 },
-          }}
-        >
+        <Box sx={{ py: { xs: 3, md: 4 }, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           <Container>
-            <Stack 
-              direction={{ xs: "column", sm: "row" }} 
-              justifyContent="space-between" 
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={{ xs: 1.5, sm: 0 }}
               alignItems="center"
-              spacing={{ xs: 2, md: 2 }}
+              justifyContent="space-between"
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Image
-                  src="/logo.png"
-                  alt="PO-VERSE Logo"
-                  width={24}
-                  height={24}
-                  style={{ borderRadius: 4 }}
-                />
-                <Typography sx={{ color: "rgba(255,255,255,0.5)", fontSize: { xs: "0.75rem", md: "0.875rem" } }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Image src="/logo.png" alt="PO-VERSE Logo" width={22} height={22} />
+                <Typography sx={{ color: "rgba(255,255,255,0.5)", fontSize: "0.85rem" }}>
                   © 2026 PO-VERSE. All rights reserved.
                 </Typography>
-              </Box>
-              <Stack direction="row" spacing={{ xs: 2, md: 3 }}>
-                <Typography 
-                  component="a" 
-                  href="#" 
-                  sx={{ 
-                    color: "rgba(255,255,255,0.5)", 
+              </Stack>
+              <Stack direction="row" spacing={3}>
+                <Typography
+                  component="a"
+                  href="#"
+                  sx={{
+                    color: "rgba(255,255,255,0.5)",
                     textDecoration: "none",
-                    fontSize: { xs: "0.75rem", md: "0.875rem" },
-                    "&:hover": { color: "#a855f7" },
-                    transition: "color 0.3s ease",
+                    fontSize: "0.85rem",
+                    "&:hover": { color: "white" },
                   }}
                 >
-                  Privacy Policy
+                  Privacy
                 </Typography>
-                <Typography 
-                  component="a" 
-                  href="#" 
-                  sx={{ 
-                    color: "rgba(255,255,255,0.5)", 
+                <Typography
+                  component="a"
+                  href="#"
+                  sx={{
+                    color: "rgba(255,255,255,0.5)",
                     textDecoration: "none",
-                    fontSize: { xs: "0.75rem", md: "0.875rem" },
-                    "&:hover": { color: "#a855f7" },
-                    transition: "color 0.3s ease",
+                    fontSize: "0.85rem",
+                    "&:hover": { color: "white" },
                   }}
                 >
-                  Terms of Service
+                  Terms
                 </Typography>
               </Stack>
             </Stack>
@@ -1489,3 +944,4 @@ export default function LandingPage() {
     </Box>
   );
 }
+

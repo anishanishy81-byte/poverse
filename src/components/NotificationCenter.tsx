@@ -133,9 +133,30 @@ export default function NotificationCenter({ iconColor = "inherit" }: Notificati
     unsubscribe: unsubscribeFCM,
   } = useFCM({
     onMessage: (payload) => {
-      // Play notification sound for foreground messages
-      const audio = new Audio("/sounds/notification.mp3");
-      audio.play().catch(() => {});
+      // Play notification sound for foreground messages (with safe fallback)
+      try {
+        const audio = new Audio("/sounds/notification.mp3");
+        audio.play().catch(() => {
+          try {
+            const AudioContextClass =
+              typeof window !== "undefined"
+                ? (window.AudioContext || (window as any).webkitAudioContext)
+                : null;
+            if (!AudioContextClass) return;
+            const ctx = new AudioContextClass();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = 880;
+            gain.gain.value = 0.05;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.15);
+            osc.onended = () => ctx.close();
+          } catch {}
+        });
+      } catch {}
     },
   });
   

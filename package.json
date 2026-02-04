@@ -9,7 +9,8 @@
     "lint": "next lint",
     "build:android": "set BUILD_ANDROID=true && next build && npx cap sync android",
     "open:android": "npx cap open android",
-    "build:apk": "echo Building APK - Open Android Studio and select Build > Build Bundle(s) / APK(s) > Build APK(s)"
+    "build:apk": "echo Building APK - Open Android Studio and select Build > Build Bundle(s) / APK(s) > Build APK(s)",
+    "copy:apk": "node scripts/copy-apk.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.1",
@@ -27,6 +28,7 @@
     "@types/google.maps": "^3.58.1",
     "bcryptjs": "^3.0.3",
     "firebase": "^12.8.0",
+    "firebase-admin": "^13.6.0",
     "framer-motion": "^12.26.2",
     "next": "^16.1.2",
     "next-pwa": "^5.6.0",

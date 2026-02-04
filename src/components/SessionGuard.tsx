@@ -11,17 +11,20 @@ import {
   Typography,
   Box,
   Avatar,
+  CircularProgress,
 } from "@mui/material";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DevicesIcon from "@mui/icons-material/Devices";
-import { useAppStore } from "@/store";
+import { useAppStore, useHasHydrated } from "@/store";
 import { subscribeToSessionChanges, validateSession } from "@/lib/session";
 
 export default function SessionGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const hasHydrated = useHasHydrated();
   const { isAuthenticated, user, logout, sessionError, setSessionError } = useAppStore();
   const [showSessionDialog, setShowSessionDialog] = useState(false);
   const [sessionMessage, setSessionMessage] = useState("");
+  const [isValidating, setIsValidating] = useState(true);
 
   // Handle session invalidation
   const handleSessionInvalid = useCallback((reason: string) => {
@@ -31,13 +34,28 @@ export default function SessionGuard({ children }: { children: React.ReactNode }
 
   // Validate session on mount and subscribe to changes
   useEffect(() => {
-    if (!isAuthenticated || !user?.id) return;
+    // Wait for hydration before validating
+    if (!hasHydrated) {
+      return;
+    }
 
-    // Validate session immediately
+    // If not authenticated after hydration, no need to validate
+    if (!isAuthenticated || !user?.id) {
+      setIsValidating(false);
+      return;
+    }
+
+    // Validate session
     const checkSession = async () => {
-      const result = await validateSession(user.id);
-      if (!result.valid) {
-        handleSessionInvalid(result.reason || "Session invalid");
+      try {
+        const result = await validateSession(user.id);
+        if (!result.valid) {
+          handleSessionInvalid(result.reason || "Session invalid");
+        }
+      } catch (error) {
+        console.error("Session validation error:", error);
+      } finally {
+        setIsValidating(false);
       }
     };
     
@@ -47,7 +65,7 @@ export default function SessionGuard({ children }: { children: React.ReactNode }
     const unsubscribe = subscribeToSessionChanges(user.id, handleSessionInvalid);
 
     return () => unsubscribe();
-  }, [isAuthenticated, user?.id, handleSessionInvalid]);
+  }, [hasHydrated, isAuthenticated, user?.id, handleSessionInvalid]);
 
   // Handle session error from store
   useEffect(() => {
@@ -63,6 +81,28 @@ export default function SessionGuard({ children }: { children: React.ReactNode }
     logout(true); // Silent logout - don't clear server session
     router.push("/login");
   };
+
+  // Show loading while hydrating or validating (but only on protected routes)
+  // Don't show loading on public routes like login, setup, home
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  const publicRoutes = ["/", "/login", "/setup"];
+  const isPublicRoute = publicRoutes.includes(pathname);
+
+  if (!hasHydrated && !isPublicRoute) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "#f5f5f5",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <>

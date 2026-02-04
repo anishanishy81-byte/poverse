@@ -76,10 +76,12 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import FolderIcon from "@mui/icons-material/Folder";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
+import GetAppIcon from "@mui/icons-material/GetApp";
 import { useAppStore, useIsAdmin, useIsSuperAdmin, useCompany } from "@/store";
 import { User, UserRole, Company } from "@/types/auth";
 import { countries, getStatesForCountry, getCitiesForState } from "@/lib/locationData";
 import NotificationCenter from "@/components/NotificationCenter";
+import { DownloadAppButton } from "@/components";
 import {
   AgentActivity,
   LeaderboardEntry,
@@ -102,6 +104,7 @@ import {
   getStatusColor,
   getStatusLabel,
 } from "@/lib/adminDashboard";
+import { isNativeApp } from "@/lib/platform";
 
 export default function AdminDashboardPage() {
   const router = useRouter();
@@ -109,6 +112,8 @@ export default function AdminDashboardPage() {
   const storedCompany = useCompany();
   const isAdmin = useIsAdmin();
   const isSuperAdmin = useIsSuperAdmin();
+  const showDownload = !isNativeApp();
+  const appDownloadUrl = process.env.NEXT_PUBLIC_APP_DOWNLOAD_URL || "/downloads/po-verse.apk";
 
   const [company, setCompany] = useState<Company | null>(storedCompany);
   const [users, setUsers] = useState<User[]>([]);
@@ -596,6 +601,26 @@ export default function AdminDashboardPage() {
               <ListItemText primary={item.label} />
             </ListItemButton>
           ))}
+          {showDownload && (
+            <ListItemButton
+              component="a"
+              href={appDownloadUrl}
+              download
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                color: "white",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.15)",
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                <GetAppIcon />
+              </ListItemIcon>
+              <ListItemText primary="Download App" />
+            </ListItemButton>
+          )}
           <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", my: 1 }} />
           <ListItemButton
             onClick={handleLogout}
@@ -721,6 +746,17 @@ export default function AdminDashboardPage() {
                 </Box>
               </Stack>
               
+              <DownloadAppButton
+                variant="outlined"
+                size="small"
+                sx={{
+                  display: { xs: "none", md: "inline-flex" },
+                  color: "white",
+                  borderColor: "rgba(255,255,255,0.45)",
+                  "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,0.1)" },
+                }}
+              />
+
               <NotificationCenter iconColor="white" />
               
               {/* Quick Actions - tablet only */}

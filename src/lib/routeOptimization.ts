@@ -19,6 +19,34 @@ import { TargetVisit } from "@/types/target";
 // Firebase path
 const ROUTES_PATH = "optimizedRoutes";
 
+// Helper to remove undefined values (Firebase RTDB doesn't accept undefined)
+const removeUndefined = <T extends Record<string, unknown>>(obj: T): T => {
+  const result = {} as T;
+  for (const key in obj) {
+    const value = obj[key];
+    if (value === undefined) continue;
+
+    if (Array.isArray(value)) {
+      result[key] = value
+        .filter((item) => item !== undefined)
+        .map((item) =>
+          item && typeof item === "object" && !Array.isArray(item)
+            ? removeUndefined(item as Record<string, unknown>)
+            : item
+        ) as T[typeof key];
+      continue;
+    }
+
+    if (value !== null && typeof value === "object") {
+      result[key] = removeUndefined(value as Record<string, unknown>) as T[typeof key];
+      continue;
+    }
+
+    result[key] = value;
+  }
+  return result;
+};
+
 // ==================== NAVIGATION LINKS ====================
 
 export const generateNavigationLinks = (
@@ -401,7 +429,7 @@ export const createOptimizedRoute = async (
     
     // Save to Firebase
     const routeRef = ref(realtimeDb, `${ROUTES_PATH}/${userId}/${route.id}`);
-    await set(routeRef, route);
+    await set(routeRef, removeUndefined(route as unknown as Record<string, unknown>));
     
     return { success: true, route };
   } catch (error) {

@@ -837,16 +837,32 @@ export const processScheduledReminders = async (companyId: string): Promise<void
     if (currentHour === 18) {
       const typePrefs = prefs.typePreferences.daily_report_reminder;
       if (!typePrefs || typePrefs.inApp || typePrefs.push) {
-        // Get today's visits count
+        // Get today's visits count (current + legacy paths)
         const today = now.toISOString().split("T")[0];
-        const visitsRef = ref(realtimeDb, `targetVisits/${companyId}/${userId}`);
-        const visitsSnapshot = await get(visitsRef);
-        
-        let visitsToday = 0;
-        if (visitsSnapshot.exists()) {
-          const visits = Object.values(visitsSnapshot.val()) as any[];
-          visitsToday = visits.filter((v) => v.createdAt?.startsWith(today)).length;
-        }
+        const visitsQuery = rtdbQuery(
+          ref(realtimeDb, "targetVisits"),
+          orderByChild("userId"),
+          equalTo(userId)
+        );
+        const visitsSnapshot = await get(visitsQuery);
+        const visitsList = visitsSnapshot.exists()
+          ? (Object.values(visitsSnapshot.val()) as any[])
+          : [];
+
+        const legacyRef = ref(realtimeDb, `targetVisits/${companyId}/${userId}`);
+        const legacySnapshot = await get(legacyRef);
+        const legacyVisits = legacySnapshot.exists()
+          ? (Object.values(legacySnapshot.val()) as any[])
+          : [];
+
+        const isVisitOnDate = (visit: any) => {
+          const dates = [visit.createdAt, visit.assignedAt, visit.completedAt, visit.skippedAt];
+          return dates.some((ts) => typeof ts === "string" && ts.startsWith(today));
+        };
+
+        const visitsToday = [...visitsList, ...legacyVisits].filter(
+          (v) => v?.companyId === companyId && isVisitOnDate(v)
+        ).length;
         
         if (visitsToday > 0) {
           await notifyDailyReportReminder(companyId, userId, userData.name, visitsToday);

@@ -16,7 +16,6 @@ import {
   ListItemText,
   ListItemIcon,
   ListItemButton,
-  ListItemSecondaryAction,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -102,6 +101,7 @@ import {
 import { VisitReason } from "@/types/target";
 import { getVisitReasonInfo } from "@/lib/targetTracking";
 import { User } from "@/types/auth";
+import { getUserLocation, calculateDistance, LocationData } from "@/lib/locationTracking";
 import {
   createAdminTarget,
   getAdminTargets,
@@ -140,6 +140,11 @@ const VISIT_REASONS_LIST: { value: VisitReason; label: string }[] = [
   { value: "contract_renewal", label: "Contract Renewal" },
   { value: "other", label: "Other" },
 ];
+
+const formatDistance = (meters: number): string => {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(1)} km`;
+};
 
 interface PlaceResult {
   place_id: string;
@@ -185,6 +190,8 @@ export default function AdminTargetsPage() {
   const [formData, setFormData] = useState<Partial<CreateAdminTargetInput>>({
     priority: "medium",
     recurrence: "none",
+    visitReason: "sales_pitch",
+    assignedTo: "",
   });
   const [assignData, setAssignData] = useState({
     assignedTo: "",
@@ -213,6 +220,11 @@ export default function AdminTargetsPage() {
   const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
   const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [agentLocation, setAgentLocation] = useState<LocationData | null>(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState<PlaceResult[]>([]);
+  const [nearbyRadius, setNearbyRadius] = useState(2000);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState<string | null>(null);
 
   // Menu state
   const [menuAnchor, setMenuAnchor] = useState<{ element: HTMLElement; target: AdminTarget } | null>(null);
@@ -288,13 +300,22 @@ export default function AdminTargetsPage() {
   }, [user?.companyId, filters]);
 
   const loadUsers = async () => {
-    if (!user?.companyId) return;
+    if (!user?.companyId || !user?.id || !user?.role) return;
     try {
-      const response = await fetch(`/api/users?companyId=${user.companyId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || []);
+      const response = await fetch(`/api/users?companyId=${user.companyId}`, {
+        headers: {
+          "x-user-role": user.role,
+          "x-user-id": user.id,
+        },
+      });
+
+      if (!response.ok) {
+        console.error("Failed to load users:", response.statusText);
+        return;
       }
+
+      const data = await response.json();
+      setUsers(data.users || []);
     } catch (err) {
       console.error("Failed to load users:", err);
     }
@@ -376,10 +397,101 @@ export default function AdminTargetsPage() {
     setSearchResults([]);
   };
 
+  useEffect(() => {
+    if (!showCreateDialog) return;
+
+    const assignedTo = formData.assignedTo;
+    if (!assignedTo) {
+      setAgentLocation(null);
+      setNearbyPlaces([]);
+      setNearbyError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadNearby = async () => {
+      setNearbyLoading(true);
+      setNearbyError(null);
+      setNearbyPlaces([]);
+
+      try {
+        const location = await getUserLocation(assignedTo);
+        if (cancelled) return;
+
+        if (!location || location.latitude == null || location.longitude == null) {
+          setAgentLocation(null);
+          setNearbyError("No recent location for this agent.");
+          setNearbyLoading(false);
+          return;
+        }
+
+        setAgentLocation(location);
+
+        if (!mapsLoaded || !placesServiceRef.current) {
+          setNearbyError("Maps are still loading. Nearby places will appear shortly.");
+          setNearbyLoading(false);
+          return;
+        }
+
+        placesServiceRef.current.nearbySearch(
+          {
+            location: { lat: location.latitude, lng: location.longitude },
+            radius: nearbyRadius,
+            type: "establishment",
+          },
+          (results, status) => {
+            if (cancelled) return;
+
+            if (status === "OK" && results) {
+              const mapped = results
+                .map((place) => {
+                  if (!place.place_id || !place.geometry?.location) return null;
+                  return {
+                    place_id: place.place_id,
+                    name: place.name || "Nearby place",
+                    formatted_address: place.vicinity || place.formatted_address || "Nearby location",
+                    geometry: place.geometry,
+                  } as PlaceResult;
+                })
+                .filter((place): place is PlaceResult => place !== null);
+
+              setNearbyPlaces(mapped);
+              setNearbyError(null);
+            } else if (status === "ZERO_RESULTS") {
+              setNearbyPlaces([]);
+              setNearbyError("No nearby places found.");
+            } else {
+              setNearbyPlaces([]);
+              setNearbyError("Failed to load nearby places.");
+            }
+
+            setNearbyLoading(false);
+          }
+        );
+      } catch (err) {
+        if (cancelled) return;
+        setNearbyError("Failed to load nearby places.");
+        setNearbyLoading(false);
+      }
+    };
+
+    loadNearby();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.assignedTo, nearbyRadius, showCreateDialog, mapsLoaded]);
+
   // Create target
   const handleCreateTarget = async () => {
     if (!user?.companyId || !formData.name || !formData.location) {
       setError("Name and location are required");
+      return;
+    }
+
+    if (!formData.assignedTo || !formData.visitReason) {
+      setError("Please select an agent and visit reason before creating the target.");
       return;
     }
 
@@ -598,9 +710,17 @@ export default function AdminTargetsPage() {
   };
 
   const resetForm = () => {
-    setFormData({ priority: "medium", recurrence: "none" });
+    setFormData({
+      priority: "medium",
+      recurrence: "none",
+      visitReason: "sales_pitch",
+      assignedTo: "",
+    });
     setLocationSearch("");
     setSearchResults([]);
+    setAgentLocation(null);
+    setNearbyPlaces([]);
+    setNearbyError(null);
   };
 
   const resetAssignForm = () => {
@@ -1174,6 +1294,103 @@ export default function AdminTargetsPage() {
                   </List>
                 </Paper>
               )}
+
+              {!editTarget && (
+                <Paper variant="outlined" sx={{ mt: 2, p: 2 }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle2">Nearby Locations for Selected Agent</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Select an agent below to view nearby places and assign faster.
+                      </Typography>
+                    </Box>
+                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                      <InputLabel>Radius</InputLabel>
+                      <Select
+                        value={nearbyRadius}
+                        label="Radius"
+                        onChange={(e) => setNearbyRadius(Number(e.target.value))}
+                      >
+                        <MenuItem value={500}>500 m</MenuItem>
+                        <MenuItem value={1000}>1 km</MenuItem>
+                        <MenuItem value={2000}>2 km</MenuItem>
+                        <MenuItem value={5000}>5 km</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Stack>
+
+                  <Box sx={{ mt: 2 }}>
+                    {!formData.assignedTo && (
+                      <Alert severity="info">Pick an agent to load nearby locations.</Alert>
+                    )}
+
+                    {formData.assignedTo && (
+                      <>
+                        {agentLocation && (
+                          <Alert severity="success" sx={{ mb: 1 }}>
+                            Agent last location: {agentLocation.address || "Location available"} ·{" "}
+                            {new Date(agentLocation.timestamp).toLocaleString()}
+                          </Alert>
+                        )}
+                        {nearbyLoading && (
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ py: 1 }}>
+                            <CircularProgress size={18} />
+                            <Typography variant="body2">Loading nearby places...</Typography>
+                          </Stack>
+                        )}
+                        {nearbyError && !nearbyLoading && (
+                          <Alert severity="warning">{nearbyError}</Alert>
+                        )}
+                        {!nearbyLoading && !nearbyError && nearbyPlaces.length === 0 && formData.assignedTo && (
+                          <Typography variant="body2" color="text.secondary">
+                            No nearby places found for this agent.
+                          </Typography>
+                        )}
+                        {nearbyPlaces.length > 0 && (
+                          <List dense sx={{ mt: 1 }}>
+                            {nearbyPlaces.slice(0, 8).map((place) => {
+                              const distance =
+                                agentLocation
+                                  ? formatDistance(
+                                      calculateDistance(
+                                        agentLocation.latitude,
+                                        agentLocation.longitude,
+                                        place.geometry.location.lat(),
+                                        place.geometry.location.lng()
+                                      )
+                                    )
+                                  : "";
+
+                              return (
+                                <ListItem
+                                  key={place.place_id}
+                                  secondaryAction={
+                                    <Button size="small" onClick={() => handleSelectPlace(place)}>
+                                      Use
+                                    </Button>
+                                  }
+                                >
+                                  <ListItemIcon>
+                                    <LocationOnIcon fontSize="small" />
+                                  </ListItemIcon>
+                                  <ListItemText
+                                    primary={place.name}
+                                    secondary={
+                                      distance
+                                        ? `${place.formatted_address} • ${distance}`
+                                        : place.formatted_address
+                                    }
+                                  />
+                                </ListItem>
+                              );
+                            })}
+                          </List>
+                        )}
+                      </>
+                    )}
+                  </Box>
+                </Paper>
+              )}
             </Grid>
 
             {/* Contact */}
@@ -1265,40 +1482,43 @@ export default function AdminTargetsPage() {
             </Grid>
 
             {/* Assignment */}
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="subtitle2" color="primary" gutterBottom sx={{ mt: 2 }}>
-                Assignment (Optional)
-              </Typography>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth>
-                <InputLabel>Assign To</InputLabel>
-                <Select
-                  value={formData.assignedTo || ""}
-                  label="Assign To"
-                  onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                >
-                  <MenuItem value="">Don&apos;t assign yet</MenuItem>
-                  {users.filter((u) => u.role === "user").map((user) => (
-                    <MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth>
-                <InputLabel>Visit Reason</InputLabel>
-                <Select
-                  value={formData.visitReason || "sales_pitch"}
-                  label="Visit Reason"
-                  onChange={(e) => setFormData({ ...formData, visitReason: e.target.value as VisitReason })}
-                >
-                  {VISIT_REASONS_LIST.map((reason) => (
-                    <MenuItem key={reason.value} value={reason.value}>{reason.label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+            {!editTarget && (
+              <>
+                <Grid size={{ xs: 12 }}>
+                  <Typography variant="subtitle2" color="primary" gutterBottom sx={{ mt: 2 }}>
+                    Assignment (Required)
+                  </Typography>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Assign To</InputLabel>
+                    <Select
+                      value={formData.assignedTo || ""}
+                      label="Assign To"
+                      onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+                    >
+                      {users.filter((u) => u.role === "user").map((user) => (
+                        <MenuItem key={user.id} value={user.id}>{user.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Visit Reason</InputLabel>
+                    <Select
+                      value={formData.visitReason || "sales_pitch"}
+                      label="Visit Reason"
+                      onChange={(e) => setFormData({ ...formData, visitReason: e.target.value as VisitReason })}
+                    >
+                      {VISIT_REASONS_LIST.map((reason) => (
+                        <MenuItem key={reason.value} value={reason.value}>{reason.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -1306,9 +1526,14 @@ export default function AdminTargetsPage() {
           <Button
             variant="contained"
             onClick={editTarget ? handleUpdateTarget : handleCreateTarget}
-            disabled={saving || !formData.name || !formData.location}
+            disabled={
+              saving ||
+              !formData.name ||
+              !formData.location ||
+              (!editTarget && (!formData.assignedTo || !formData.visitReason))
+            }
           >
-            {saving ? <CircularProgress size={20} /> : (editTarget ? "Update" : "Create")}
+            {saving ? <CircularProgress size={20} /> : (editTarget ? "Update" : "Create & Assign")}
           </Button>
         </DialogActions>
       </Dialog>

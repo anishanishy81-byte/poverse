@@ -28,6 +28,50 @@ import {
 const TARGETS_PATH = "targets";
 const TARGET_VISITS_PATH = "targetVisits";
 const USER_ACTIVE_VISITS_PATH = "userActiveVisits";
+const ASSIGNMENTS_PATH = "targetAssignments";
+
+const updateAssignmentStatus = async (
+  visitId: string,
+  userId: string,
+  status: TargetStatus,
+  extra?: { skipReason?: string }
+): Promise<void> => {
+  try {
+    const visitRef = ref(realtimeDb, `${TARGET_VISITS_PATH}/${visitId}`);
+    const visitSnapshot = await get(visitRef);
+    if (!visitSnapshot.exists()) return;
+
+    const visit = visitSnapshot.val() as TargetVisit & { assignmentId?: string };
+    if (!visit.assignmentId || !visit.companyId) return;
+
+    const assignmentRef = ref(
+      realtimeDb,
+      `${ASSIGNMENTS_PATH}/${visit.companyId}/${userId}/${visit.assignmentId}`
+    );
+    const assignmentSnap = await get(assignmentRef);
+    if (!assignmentSnap.exists()) return;
+
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = { updatedAt: now };
+
+    if (status === "completed") {
+      updates.status = "completed";
+      updates.completedAt = now;
+    } else if (status === "skipped") {
+      updates.status = "cancelled";
+      updates.cancelledAt = now;
+      updates.cancelReason = extra?.skipReason || "Visit skipped";
+    } else if (status === "in_progress" || status === "in_transit" || status === "reached") {
+      updates.status = "in_progress";
+    } else if (status === "pending") {
+      updates.status = "pending";
+    }
+
+    await update(assignmentRef, updates);
+  } catch (error) {
+    console.error("Error updating assignment status:", error);
+  }
+};
 
 // ==================== DISTANCE CALCULATION ====================
 
@@ -189,6 +233,7 @@ export const assignTargetToUser = async (
     outcomeFlags: [],
     offersDiscussed: [],
     assignedAt: now,
+    createdAt: now,
     createdBy: assignedBy,
     updatedAt: now,
   };
@@ -295,6 +340,12 @@ export const updateVisitStatus = async (
 
   await update(visitRef, cleanData);
   await update(activeVisitRef, { status });
+
+  const skipReason =
+    status === "skipped" && additionalData && typeof additionalData.skipReason === "string"
+      ? additionalData.skipReason
+      : undefined;
+  await updateAssignmentStatus(visitId, userId, status, { skipReason });
 };
 
 export const startTransitToTarget = async (

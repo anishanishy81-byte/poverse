@@ -43,6 +43,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  CircularProgress,
 } from "@mui/material";
 import BusinessIcon from "@mui/icons-material/Business";
 import PeopleIcon from "@mui/icons-material/People";
@@ -59,9 +60,13 @@ import ChatIcon from "@mui/icons-material/Chat";
 import SearchIcon from "@mui/icons-material/Search";
 import SupervisorAccountIcon from "@mui/icons-material/SupervisorAccount";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import MapIcon from "@mui/icons-material/Map";
+import GetAppIcon from "@mui/icons-material/GetApp";
 import Image from "next/image";
-import { useAppStore, useIsSuperAdmin } from "@/store";
+import { useAppStore, useIsSuperAdmin, useHasHydrated } from "@/store";
 import { User, UserRole, Company } from "@/types/auth";
+import { isNativeApp } from "@/lib/platform";
+import { DownloadAppButton } from "@/components";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -80,8 +85,11 @@ function TabPanel(props: TabPanelProps) {
 
 export default function SuperAdminDashboardPage() {
   const router = useRouter();
+  const hasHydrated = useHasHydrated();
   const { isAuthenticated, user, logout } = useAppStore();
   const isSuperAdmin = useIsSuperAdmin();
+  const showDownload = !isNativeApp();
+  const appDownloadUrl = process.env.NEXT_PUBLIC_APP_DOWNLOAD_URL || "/downloads/po-verse.apk";
   
   const [tabValue, setTabValue] = useState(0);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -101,12 +109,14 @@ export default function SuperAdminDashboardPage() {
     address: "",
     city: "",
     state: "",
-    country: "",
+    country: "India",
     phone: "",
     email: "",
     website: "",
     description: "",
-    userLimit: 10,
+    industry: "",
+    adminLimit: 5,
+    agentLimit: 50,
   });
   
   // User Dialog
@@ -129,6 +139,9 @@ export default function SuperAdminDashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Wait for hydration before checking auth
+    if (!hasHydrated) return;
+    
     if (!isAuthenticated) {
       router.push("/login");
       return;
@@ -137,14 +150,14 @@ export default function SuperAdminDashboardPage() {
       router.push("/dashboard");
       return;
     }
-  }, [isAuthenticated, isSuperAdmin, router]);
+  }, [hasHydrated, isAuthenticated, isSuperAdmin, router]);
 
   useEffect(() => {
-    if (isAuthenticated && isSuperAdmin) {
+    if (hasHydrated && isAuthenticated && isSuperAdmin) {
       fetchCompanies();
       fetchUsers();
     }
-  }, [isAuthenticated, isSuperAdmin]);
+  }, [hasHydrated, isAuthenticated, isSuperAdmin]);
 
   // Fetch user profile picture
   useEffect(() => {
@@ -217,12 +230,14 @@ export default function SuperAdminDashboardPage() {
       address: "",
       city: "",
       state: "",
-      country: "",
+      country: "India",
       phone: "",
       email: "",
       website: "",
       description: "",
-      userLimit: 10,
+      industry: "",
+      adminLimit: 5,
+      agentLimit: 50,
     });
     setFormError(null);
     setFormSuccess(null);
@@ -238,12 +253,14 @@ export default function SuperAdminDashboardPage() {
       address: company.address || "",
       city: company.city || "",
       state: company.state || "",
-      country: company.country || "",
+      country: company.country || "India",
       phone: company.phone || "",
       email: company.email || "",
       website: company.website || "",
       description: company.description || "",
-      userLimit: company.userLimit || 10,
+      industry: company.industry || "",
+      adminLimit: company.adminLimit || 5,
+      agentLimit: company.agentLimit || 50,
     });
     setFormError(null);
     setFormSuccess(null);
@@ -479,6 +496,23 @@ export default function SuperAdminDashboardPage() {
       getCompanyName(u.companyId).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Show loading while hydrating
+  if (!hasHydrated) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "#f5f5f5",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   if (!isAuthenticated || !isSuperAdmin) {
     return null;
   }
@@ -491,6 +525,7 @@ export default function SuperAdminDashboardPage() {
 
   // SuperAdmin navigation items
   const superadminNavItems = [
+    { label: "Live Maps", icon: <MapIcon />, path: "/superadmin/maps" },
     { label: "Chat", icon: <ChatIcon />, path: "/chat" },
     { label: "Profile", icon: <AccountCircleIcon />, path: "/profile" },
   ];
@@ -563,6 +598,26 @@ export default function SuperAdminDashboardPage() {
               <ListItemText primary={item.label} />
             </ListItemButton>
           ))}
+          {showDownload && (
+            <ListItemButton
+              component="a"
+              href={appDownloadUrl}
+              download
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                color: "white",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.15)",
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+                <GetAppIcon />
+              </ListItemIcon>
+              <ListItemText primary="Download App" />
+            </ListItemButton>
+          )}
           <Divider sx={{ borderColor: "rgba(255,255,255,0.2)", my: 1 }} />
           <ListItemButton
             onClick={handleLogout}
@@ -653,12 +708,36 @@ export default function SuperAdminDashboardPage() {
                 </Box>
               </Stack>
 
+              <DownloadAppButton
+                variant="outlined"
+                size="small"
+                sx={{
+                  display: { xs: "none", md: "inline-flex" },
+                  color: "white",
+                  borderColor: "rgba(255,255,255,0.45)",
+                  "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,0.1)" },
+                }}
+              />
+
               {/* Quick Actions - tablet+ */}
               <Stack 
                 direction="row" 
                 spacing={0.5} 
                 sx={{ display: { xs: "none", sm: "flex" } }}
               >
+                <Tooltip title="Live Maps">
+                  <IconButton
+                    onClick={() => router.push("/superadmin/maps")}
+                    size="small"
+                    sx={{
+                      color: "white",
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                    }}
+                  >
+                    <MapIcon />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip title="Chat">
                   <IconButton
                     onClick={() => router.push("/chat")}
@@ -999,25 +1078,32 @@ export default function SuperAdminDashboardPage() {
 
       {/* Company Dialog */}
       <Dialog open={openCompanyDialog} onClose={handleCloseCompanyDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
+        <DialogTitle sx={{ 
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", 
+          color: "white",
+          display: "flex",
+          alignItems: "center",
+          gap: 1
+        }}>
+          <BusinessIcon />
           {companyDialogMode === "create" ? "Create New Company" : "Edit Company"}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ mt: 2 }}>
           {formError && (
-            <Alert severity="error" sx={{ mb: 2, mt: 1 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {formError}
             </Alert>
           )}
           {formSuccess && (
-            <Alert severity="success" sx={{ mb: 2, mt: 1 }}>
+            <Alert severity="success" sx={{ mb: 2 }}>
               {formSuccess}
             </Alert>
           )}
 
-          <Grid container spacing={3} sx={{ mt: 1 }}>
+          <Grid container spacing={3}>
             {/* Logo Upload */}
             <Grid size={{ xs: 12 }}>
-              <Box sx={{ textAlign: "center" }}>
+              <Paper sx={{ p: 2, textAlign: "center", bgcolor: "grey.50", borderRadius: 2 }}>
                 <input
                   type="file"
                   accept="image/*"
@@ -1030,7 +1116,7 @@ export default function SuperAdminDashboardPage() {
                     <img
                       src={companyFormData.logo}
                       alt="Company Logo"
-                      style={{ maxHeight: 100, maxWidth: 200, objectFit: "contain" }}
+                      style={{ maxHeight: 100, maxWidth: 200, objectFit: "contain", borderRadius: 8 }}
                     />
                     <IconButton
                       size="small"
@@ -1045,11 +1131,20 @@ export default function SuperAdminDashboardPage() {
                     variant="outlined"
                     startIcon={<CloudUploadIcon />}
                     onClick={() => fileInputRef.current?.click()}
+                    sx={{ py: 2, px: 4 }}
                   >
-                    Upload Logo
+                    Upload Company Logo
                   </Button>
                 )}
-              </Box>
+              </Paper>
+            </Grid>
+
+            {/* Basic Information Section */}
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ mb: 1 }}>
+                📋 Basic Information
+              </Typography>
+              <Divider />
             </Grid>
 
             <Grid size={{ xs: 12, md: 6 }}>
@@ -1059,8 +1154,59 @@ export default function SuperAdminDashboardPage() {
                 onChange={(e) => setCompanyFormData({ ...companyFormData, name: e.target.value })}
                 fullWidth
                 required
+                placeholder="Enter company name"
               />
             </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl fullWidth>
+                <InputLabel>Industry</InputLabel>
+                <Select
+                  value={companyFormData.industry}
+                  label="Industry"
+                  onChange={(e) => setCompanyFormData({ ...companyFormData, industry: e.target.value })}
+                >
+                  <MenuItem value="">Select Industry</MenuItem>
+                  <MenuItem value="Technology">Technology</MenuItem>
+                  <MenuItem value="Healthcare">Healthcare</MenuItem>
+                  <MenuItem value="Finance">Finance & Banking</MenuItem>
+                  <MenuItem value="Retail">Retail & E-commerce</MenuItem>
+                  <MenuItem value="Manufacturing">Manufacturing</MenuItem>
+                  <MenuItem value="Real Estate">Real Estate</MenuItem>
+                  <MenuItem value="Education">Education</MenuItem>
+                  <MenuItem value="FMCG">FMCG</MenuItem>
+                  <MenuItem value="Pharma">Pharmaceutical</MenuItem>
+                  <MenuItem value="Logistics">Logistics & Transportation</MenuItem>
+                  <MenuItem value="Agriculture">Agriculture</MenuItem>
+                  <MenuItem value="Telecom">Telecom</MenuItem>
+                  <MenuItem value="Insurance">Insurance</MenuItem>
+                  <MenuItem value="Construction">Construction</MenuItem>
+                  <MenuItem value="Media">Media & Entertainment</MenuItem>
+                  <MenuItem value="Hospitality">Hospitality</MenuItem>
+                  <MenuItem value="Automobile">Automobile</MenuItem>
+                  <MenuItem value="Other">Other</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <TextField
+                label="Description"
+                value={companyFormData.description}
+                onChange={(e) => setCompanyFormData({ ...companyFormData, description: e.target.value })}
+                fullWidth
+                multiline
+                rows={2}
+                placeholder="Brief description about the company"
+              />
+            </Grid>
+
+            {/* Contact Information Section */}
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ mb: 1, mt: 1 }}>
+                📞 Contact Information
+              </Typography>
+              <Divider />
+            </Grid>
+
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 label="Email"
@@ -1068,6 +1214,7 @@ export default function SuperAdminDashboardPage() {
                 value={companyFormData.email}
                 onChange={(e) => setCompanyFormData({ ...companyFormData, email: e.target.value })}
                 fullWidth
+                placeholder="company@example.com"
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -1076,6 +1223,7 @@ export default function SuperAdminDashboardPage() {
                 value={companyFormData.phone}
                 onChange={(e) => setCompanyFormData({ ...companyFormData, phone: e.target.value })}
                 fullWidth
+                placeholder="+91 XXXXX XXXXX"
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -1084,69 +1232,295 @@ export default function SuperAdminDashboardPage() {
                 value={companyFormData.website}
                 onChange={(e) => setCompanyFormData({ ...companyFormData, website: e.target.value })}
                 fullWidth
+                placeholder="https://www.example.com"
               />
             </Grid>
+
+            {/* Address Section */}
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ mb: 1, mt: 1 }}>
+                📍 Address
+              </Typography>
+              <Divider />
+            </Grid>
+
             <Grid size={{ xs: 12 }}>
               <TextField
-                label="Address"
+                label="Street Address"
                 value={companyFormData.address}
                 onChange={(e) => setCompanyFormData({ ...companyFormData, address: e.target.value })}
                 fullWidth
+                placeholder="Building/Street name"
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="City"
-                value={companyFormData.city}
-                onChange={(e) => setCompanyFormData({ ...companyFormData, city: e.target.value })}
-                fullWidth
-              />
+              <FormControl fullWidth>
+                <InputLabel>Country</InputLabel>
+                <Select
+                  value={companyFormData.country}
+                  label="Country"
+                  onChange={(e) => setCompanyFormData({ ...companyFormData, country: e.target.value, state: "", city: "" })}
+                >
+                  <MenuItem value="India">🇮🇳 India</MenuItem>
+                  <MenuItem value="USA">🇺🇸 United States</MenuItem>
+                  <MenuItem value="UK">🇬🇧 United Kingdom</MenuItem>
+                  <MenuItem value="UAE">🇦🇪 UAE</MenuItem>
+                  <MenuItem value="Singapore">🇸🇬 Singapore</MenuItem>
+                  <MenuItem value="Australia">🇦🇺 Australia</MenuItem>
+                  <MenuItem value="Canada">🇨🇦 Canada</MenuItem>
+                  <MenuItem value="Germany">🇩🇪 Germany</MenuItem>
+                  <MenuItem value="Other">🌍 Other</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="State"
-                value={companyFormData.state}
-                onChange={(e) => setCompanyFormData({ ...companyFormData, state: e.target.value })}
-                fullWidth
-              />
+              <FormControl fullWidth>
+                <InputLabel>State</InputLabel>
+                <Select
+                  value={companyFormData.state}
+                  label="State"
+                  onChange={(e) => setCompanyFormData({ ...companyFormData, state: e.target.value, city: "" })}
+                  disabled={!companyFormData.country}
+                >
+                  <MenuItem value="">Select State</MenuItem>
+                  {companyFormData.country === "India" && [
+                    <MenuItem key="AP" value="Andhra Pradesh">Andhra Pradesh</MenuItem>,
+                    <MenuItem key="AR" value="Arunachal Pradesh">Arunachal Pradesh</MenuItem>,
+                    <MenuItem key="AS" value="Assam">Assam</MenuItem>,
+                    <MenuItem key="BR" value="Bihar">Bihar</MenuItem>,
+                    <MenuItem key="CG" value="Chhattisgarh">Chhattisgarh</MenuItem>,
+                    <MenuItem key="GA" value="Goa">Goa</MenuItem>,
+                    <MenuItem key="GJ" value="Gujarat">Gujarat</MenuItem>,
+                    <MenuItem key="HR" value="Haryana">Haryana</MenuItem>,
+                    <MenuItem key="HP" value="Himachal Pradesh">Himachal Pradesh</MenuItem>,
+                    <MenuItem key="JH" value="Jharkhand">Jharkhand</MenuItem>,
+                    <MenuItem key="KA" value="Karnataka">Karnataka</MenuItem>,
+                    <MenuItem key="KL" value="Kerala">Kerala</MenuItem>,
+                    <MenuItem key="MP" value="Madhya Pradesh">Madhya Pradesh</MenuItem>,
+                    <MenuItem key="MH" value="Maharashtra">Maharashtra</MenuItem>,
+                    <MenuItem key="MN" value="Manipur">Manipur</MenuItem>,
+                    <MenuItem key="ML" value="Meghalaya">Meghalaya</MenuItem>,
+                    <MenuItem key="MZ" value="Mizoram">Mizoram</MenuItem>,
+                    <MenuItem key="NL" value="Nagaland">Nagaland</MenuItem>,
+                    <MenuItem key="OD" value="Odisha">Odisha</MenuItem>,
+                    <MenuItem key="PB" value="Punjab">Punjab</MenuItem>,
+                    <MenuItem key="RJ" value="Rajasthan">Rajasthan</MenuItem>,
+                    <MenuItem key="SK" value="Sikkim">Sikkim</MenuItem>,
+                    <MenuItem key="TN" value="Tamil Nadu">Tamil Nadu</MenuItem>,
+                    <MenuItem key="TS" value="Telangana">Telangana</MenuItem>,
+                    <MenuItem key="TR" value="Tripura">Tripura</MenuItem>,
+                    <MenuItem key="UP" value="Uttar Pradesh">Uttar Pradesh</MenuItem>,
+                    <MenuItem key="UK" value="Uttarakhand">Uttarakhand</MenuItem>,
+                    <MenuItem key="WB" value="West Bengal">West Bengal</MenuItem>,
+                    <MenuItem key="DL" value="Delhi">Delhi</MenuItem>,
+                    <MenuItem key="JK" value="Jammu & Kashmir">Jammu & Kashmir</MenuItem>,
+                    <MenuItem key="LA" value="Ladakh">Ladakh</MenuItem>,
+                  ]}
+                  {companyFormData.country === "USA" && [
+                    <MenuItem key="CA" value="California">California</MenuItem>,
+                    <MenuItem key="TX" value="Texas">Texas</MenuItem>,
+                    <MenuItem key="NY" value="New York">New York</MenuItem>,
+                    <MenuItem key="FL" value="Florida">Florida</MenuItem>,
+                    <MenuItem key="IL" value="Illinois">Illinois</MenuItem>,
+                    <MenuItem key="WA" value="Washington">Washington</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.country && !["India", "USA"].includes(companyFormData.country) && (
+                    <MenuItem value="Other">Other</MenuItem>
+                  )}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="Country"
-                value={companyFormData.country}
-                onChange={(e) => setCompanyFormData({ ...companyFormData, country: e.target.value })}
-                fullWidth
-              />
+              <FormControl fullWidth>
+                <InputLabel>City</InputLabel>
+                <Select
+                  value={companyFormData.city}
+                  label="City"
+                  onChange={(e) => setCompanyFormData({ ...companyFormData, city: e.target.value })}
+                  disabled={!companyFormData.state}
+                >
+                  <MenuItem value="">Select City</MenuItem>
+                  {companyFormData.state === "Maharashtra" && [
+                    <MenuItem key="Mumbai" value="Mumbai">Mumbai</MenuItem>,
+                    <MenuItem key="Pune" value="Pune">Pune</MenuItem>,
+                    <MenuItem key="Nagpur" value="Nagpur">Nagpur</MenuItem>,
+                    <MenuItem key="Thane" value="Thane">Thane</MenuItem>,
+                    <MenuItem key="Nashik" value="Nashik">Nashik</MenuItem>,
+                    <MenuItem key="Aurangabad" value="Aurangabad">Aurangabad</MenuItem>,
+                    <MenuItem key="Solapur" value="Solapur">Solapur</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Karnataka" && [
+                    <MenuItem key="Bangalore" value="Bangalore">Bangalore</MenuItem>,
+                    <MenuItem key="Mysore" value="Mysore">Mysore</MenuItem>,
+                    <MenuItem key="Hubli" value="Hubli">Hubli</MenuItem>,
+                    <MenuItem key="Mangalore" value="Mangalore">Mangalore</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Tamil Nadu" && [
+                    <MenuItem key="Chennai" value="Chennai">Chennai</MenuItem>,
+                    <MenuItem key="Coimbatore" value="Coimbatore">Coimbatore</MenuItem>,
+                    <MenuItem key="Madurai" value="Madurai">Madurai</MenuItem>,
+                    <MenuItem key="Salem" value="Salem">Salem</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Telangana" && [
+                    <MenuItem key="Hyderabad" value="Hyderabad">Hyderabad</MenuItem>,
+                    <MenuItem key="Warangal" value="Warangal">Warangal</MenuItem>,
+                    <MenuItem key="Nizamabad" value="Nizamabad">Nizamabad</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Delhi" && [
+                    <MenuItem key="New Delhi" value="New Delhi">New Delhi</MenuItem>,
+                    <MenuItem key="North Delhi" value="North Delhi">North Delhi</MenuItem>,
+                    <MenuItem key="South Delhi" value="South Delhi">South Delhi</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Gujarat" && [
+                    <MenuItem key="Ahmedabad" value="Ahmedabad">Ahmedabad</MenuItem>,
+                    <MenuItem key="Surat" value="Surat">Surat</MenuItem>,
+                    <MenuItem key="Vadodara" value="Vadodara">Vadodara</MenuItem>,
+                    <MenuItem key="Rajkot" value="Rajkot">Rajkot</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Uttar Pradesh" && [
+                    <MenuItem key="Lucknow" value="Lucknow">Lucknow</MenuItem>,
+                    <MenuItem key="Noida" value="Noida">Noida</MenuItem>,
+                    <MenuItem key="Ghaziabad" value="Ghaziabad">Ghaziabad</MenuItem>,
+                    <MenuItem key="Kanpur" value="Kanpur">Kanpur</MenuItem>,
+                    <MenuItem key="Agra" value="Agra">Agra</MenuItem>,
+                    <MenuItem key="Varanasi" value="Varanasi">Varanasi</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "West Bengal" && [
+                    <MenuItem key="Kolkata" value="Kolkata">Kolkata</MenuItem>,
+                    <MenuItem key="Howrah" value="Howrah">Howrah</MenuItem>,
+                    <MenuItem key="Durgapur" value="Durgapur">Durgapur</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Rajasthan" && [
+                    <MenuItem key="Jaipur" value="Jaipur">Jaipur</MenuItem>,
+                    <MenuItem key="Jodhpur" value="Jodhpur">Jodhpur</MenuItem>,
+                    <MenuItem key="Udaipur" value="Udaipur">Udaipur</MenuItem>,
+                    <MenuItem key="Kota" value="Kota">Kota</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Kerala" && [
+                    <MenuItem key="Thiruvananthapuram" value="Thiruvananthapuram">Thiruvananthapuram</MenuItem>,
+                    <MenuItem key="Kochi" value="Kochi">Kochi</MenuItem>,
+                    <MenuItem key="Kozhikode" value="Kozhikode">Kozhikode</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Punjab" && [
+                    <MenuItem key="Chandigarh" value="Chandigarh">Chandigarh</MenuItem>,
+                    <MenuItem key="Ludhiana" value="Ludhiana">Ludhiana</MenuItem>,
+                    <MenuItem key="Amritsar" value="Amritsar">Amritsar</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state === "Haryana" && [
+                    <MenuItem key="Gurgaon" value="Gurgaon">Gurgaon</MenuItem>,
+                    <MenuItem key="Faridabad" value="Faridabad">Faridabad</MenuItem>,
+                    <MenuItem key="Panipat" value="Panipat">Panipat</MenuItem>,
+                    <MenuItem key="Other" value="Other">Other</MenuItem>,
+                  ]}
+                  {companyFormData.state && !["Maharashtra", "Karnataka", "Tamil Nadu", "Telangana", "Delhi", "Gujarat", "Uttar Pradesh", "West Bengal", "Rajasthan", "Kerala", "Punjab", "Haryana"].includes(companyFormData.state) && (
+                    <MenuItem value="Other">Other</MenuItem>
+                  )}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {/* User Limits Section */}
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="subtitle2" fontWeight={600} color="primary" sx={{ mb: 1, mt: 1 }}>
+                👥 User Limits
+              </Typography>
+              <Divider />
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Paper sx={{ p: 2, bgcolor: "#fff3e0", borderRadius: 2 }}>
+                <Stack direction="row" alignItems="center" spacing={2}>
+                  <Avatar sx={{ bgcolor: "#f59e0b" }}>
+                    <SupervisorAccountIcon />
+                  </Avatar>
+                  <Box flex={1}>
+                    <Typography variant="subtitle2" fontWeight={600}>Admin Limit</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Maximum admins allowed
+                    </Typography>
+                  </Box>
+                  <TextField
+                    type="number"
+                    value={companyFormData.adminLimit}
+                    onChange={(e) => setCompanyFormData({ ...companyFormData, adminLimit: Math.max(1, parseInt(e.target.value) || 1) })}
+                    sx={{ width: 100 }}
+                    size="small"
+                    InputProps={{ inputProps: { min: 1, max: 100 } }}
+                  />
+                </Stack>
+              </Paper>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="Description"
-                value={companyFormData.description}
-                onChange={(e) => setCompanyFormData({ ...companyFormData, description: e.target.value })}
-                fullWidth
-                multiline
-                rows={3}
-              />
+              <Paper sx={{ p: 2, bgcolor: "#e8f5e9", borderRadius: 2 }}>
+                <Stack direction="row" alignItems="center" spacing={2}>
+                  <Avatar sx={{ bgcolor: "#10b981" }}>
+                    <PeopleIcon />
+                  </Avatar>
+                  <Box flex={1}>
+                    <Typography variant="subtitle2" fontWeight={600}>Agent Limit</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Maximum agents allowed
+                    </Typography>
+                  </Box>
+                  <TextField
+                    type="number"
+                    value={companyFormData.agentLimit}
+                    onChange={(e) => setCompanyFormData({ ...companyFormData, agentLimit: Math.max(1, parseInt(e.target.value) || 1) })}
+                    sx={{ width: 100 }}
+                    size="small"
+                    InputProps={{ inputProps: { min: 1, max: 10000 } }}
+                  />
+                </Stack>
+              </Paper>
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                label="User Limit"
-                type="number"
-                value={companyFormData.userLimit}
-                onChange={(e) => setCompanyFormData({ ...companyFormData, userLimit: parseInt(e.target.value) || 10 })}
-                fullWidth
-                required
-                helperText="Maximum number of users (admins + agents) allowed for this company"
-                InputProps={{ inputProps: { min: 1 } }}
-              />
+
+            {/* Summary */}
+            <Grid size={{ xs: 12 }}>
+              <Paper sx={{ p: 2, bgcolor: "grey.100", borderRadius: 2 }}>
+                <Stack direction="row" spacing={4} justifyContent="center">
+                  <Box textAlign="center">
+                    <Typography variant="h5" fontWeight={700} color="primary">
+                      {companyFormData.adminLimit + companyFormData.agentLimit}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Total Users</Typography>
+                  </Box>
+                  <Divider orientation="vertical" flexItem />
+                  <Box textAlign="center">
+                    <Typography variant="h5" fontWeight={700} color="#f59e0b">
+                      {companyFormData.adminLimit}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Admins</Typography>
+                  </Box>
+                  <Divider orientation="vertical" flexItem />
+                  <Box textAlign="center">
+                    <Typography variant="h5" fontWeight={700} color="#10b981">
+                      {companyFormData.agentLimit}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Agents</Typography>
+                  </Box>
+                </Stack>
+              </Paper>
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions sx={{ p: 2.5 }}>
-          <Button onClick={handleCloseCompanyDialog}>Cancel</Button>
+        <DialogActions sx={{ p: 2.5, bgcolor: "grey.50" }}>
+          <Button onClick={handleCloseCompanyDialog} variant="outlined">Cancel</Button>
           <Button
             onClick={handleSubmitCompany}
             variant="contained"
+            startIcon={companyDialogMode === "create" ? <AddIcon /> : <EditIcon />}
             sx={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" }}
           >
             {companyDialogMode === "create" ? "Create Company" : "Save Changes"}

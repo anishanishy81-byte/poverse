@@ -6,3 +6,4 @@ export { SelfieCamera } from "./SelfieCamera";
 export { default as NotificationCenter } from "./NotificationCenter";
 export { OfflineIndicator, OfflineBanner } from "./OfflineIndicator";
 export { LeaveCalendar } from "./LeaveCalendar";
+export { default as DownloadAppButton } from "./DownloadAppButton";

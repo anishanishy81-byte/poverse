@@ -82,26 +82,56 @@ export const generateDailyReport = async (
     ? attendanceSnapshot.val() as AttendanceRecord 
     : null;
   
-  // Fetch target visits for the day
-  const visitsRef = ref(realtimeDb, `${TARGET_VISITS_PATH}/${userId}`);
-  const visitsSnapshot = await get(visitsRef);
-  const allVisits = visitsSnapshot.exists() ? visitsSnapshot.val() : {};
-  
+  // Fetch target visits for the user (current + legacy paths)
+  const visitsQuery = rtdbQuery(
+    ref(realtimeDb, TARGET_VISITS_PATH),
+    orderByChild("userId"),
+    equalTo(userId)
+  );
+  const visitsSnapshot = await get(visitsQuery);
+  const visitsList = visitsSnapshot.exists()
+    ? (Object.values(visitsSnapshot.val()) as TargetVisit[])
+    : [];
+
+  const legacyRef = ref(realtimeDb, `${TARGET_VISITS_PATH}/${companyId}/${userId}`);
+  const legacySnapshot = await get(legacyRef);
+  const legacyVisits = legacySnapshot.exists()
+    ? (Object.values(legacySnapshot.val()) as TargetVisit[])
+    : [];
+
+  const mergedVisits = new Map<string, TargetVisit>();
+  [...visitsList, ...legacyVisits].forEach((visit) => {
+    if (visit?.id) mergedVisits.set(visit.id, visit);
+  });
+
+  const isVisitOnDate = (visit: TargetVisit) => {
+    const dates = [
+      (visit as any).createdAt,
+      visit.assignedAt,
+      visit.completedAt,
+      visit.skippedAt,
+    ];
+    return dates.some((ts) => typeof ts === "string" && ts.startsWith(date));
+  };
+
   // Filter visits for the specific date
-  const todayVisits: TargetVisit[] = Object.values(allVisits).filter(
-    (visit: any) => visit.createdAt?.startsWith(date)
-  ) as TargetVisit[];
+  const todayVisits: TargetVisit[] = Array.from(mergedVisits.values()).filter(
+    (visit) => visit.companyId === companyId && isVisitOnDate(visit)
+  );
   
   // Fetch location history for the day
-  const locationRef = ref(realtimeDb, `${LOCATION_HISTORY_PATH}/${userId}/${date}`);
+  const locationRef = ref(realtimeDb, `${LOCATION_HISTORY_PATH}/${userId}`);
   const locationSnapshot = await get(locationRef);
-  const locationHistory = locationSnapshot.exists() 
-    ? Object.values(locationSnapshot.val()) as any[]
+  const locationHistory = locationSnapshot.exists()
+    ? (Object.values(locationSnapshot.val()) as any[])
     : [];
+  const todayLocationHistory = locationHistory.filter(
+    (entry) => entry?.timestamp && String(entry.timestamp).startsWith(date)
+  );
   
   // Calculate travel distance
   let totalDistanceKm = 0;
-  const sortedLocations = locationHistory.sort(
+  const sortedLocations = todayLocationHistory.sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
   

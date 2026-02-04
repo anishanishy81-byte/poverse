@@ -1188,6 +1188,7 @@ const createVisitFromAssignment = async (
     outcomeFlags: [],
     offersDiscussed: [],
     assignedAt: now,
+    createdAt: now,
     createdBy: assignment.assignedBy,
     updatedAt: now,
     // Admin assignment reference
@@ -1196,9 +1197,13 @@ const createVisitFromAssignment = async (
     deadline: assignment.deadline,
   };
   
-  // Save to targetVisits (agent's visits)
-  const visitRef = ref(realtimeDb, `targetVisits/${companyId}/${userId}/${visitId}`);
+  // Save to targetVisits (global visits collection)
+  const visitRef = ref(realtimeDb, `targetVisits/${visitId}`);
   await set(visitRef, removeUndefined(visit as unknown as Record<string, unknown>));
+
+  // Add to user's active visits for agent UI
+  const activeVisitRef = ref(realtimeDb, `userActiveVisits/${userId}/${visitId}`);
+  await set(activeVisitRef, { visitId, targetId: target.id, status: "pending" });
 };
 
 const getRandomColor = (): string => {

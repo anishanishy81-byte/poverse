@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { User, UserRole, Company } from "@/types/auth";
 import { updatePresence } from "@/lib/chat";
 import { 
@@ -13,6 +13,10 @@ interface AppState {
   // Theme
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  
+  // Hydration state
+  _hasHydrated: boolean;
+  setHasHydrated: (state: boolean) => void;
   
   // Auth
   isAuthenticated: boolean;
@@ -39,6 +43,10 @@ export const useAppStore = create<AppState>()(
         isDarkMode: false,
         toggleDarkMode: () =>
           set((state) => ({ isDarkMode: !state.isDarkMode })),
+
+        // Hydration state
+        _hasHydrated: false,
+        setHasHydrated: (state) => set({ _hasHydrated: state }),
 
         // Auth
         isAuthenticated: false,
@@ -118,18 +126,23 @@ export const useAppStore = create<AppState>()(
       }),
       {
         name: "app-storage",
+        storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
           isDarkMode: state.isDarkMode,
           isAuthenticated: state.isAuthenticated,
           user: state.user,
           company: state.company,
         }),
+        onRehydrateStorage: () => (state) => {
+          state?.setHasHydrated(true);
+        },
       }
     )
   )
 );
 
 // Selectors for performance optimization
+export const useHasHydrated = () => useAppStore((state) => state._hasHydrated);
 export const useIsDarkMode = () => useAppStore((state) => state.isDarkMode);
 export const useIsAuthenticated = () => useAppStore((state) => state.isAuthenticated);
 export const useUser = () => useAppStore((state) => state.user);
