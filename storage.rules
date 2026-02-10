@@ -1,0 +1,41 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /app-downloads/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /profile-pictures/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /company-logos/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /documents/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /expense-receipts/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /attendance-selfies/{companyId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /attendance/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /chat/{conversationId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /stories/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

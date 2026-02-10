@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "604319923602",
+    "firebase_url": "https://po-verse-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "po-verse",
+    "storage_bucket": "po-verse.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:604319923602:android:e9172939da35570eae154b",
+        "android_client_info": {
+          "package_name": "com.poverse.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBx9vU1Aot7NPVfRbWqylauedJK8rvTUmo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,72 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    
+    "conversations": {
+      ".indexOn": ["updatedAt"]
+    },
+    
+    "messages": {
+      "$conversationId": {
+        ".indexOn": ["timestamp"]
+      }
+    },
+    
+    "locationHistory": {
+      "$userId": {
+        ".indexOn": ["timestamp"]
+      }
+    },
+    
+    "attendance": {
+      ".indexOn": ["userId", "date"]
+    },
+    
+    "targets": {
+      ".indexOn": ["companyId"]
+    },
+    
+    "targetVisits": {
+      ".indexOn": ["userId", "companyId", "status", "assignedAt"]
+    },
+    
+    "dailyReports": {
+      ".indexOn": ["userId", "date", "status"]
+    },
+    
+    "notifications": {
+      "$userId": {
+        ".indexOn": ["timestamp", "read"]
+      }
+    },
+    
+    "incentives": {
+      "$userId": {
+        ".indexOn": ["date"]
+      }
+    },
+    
+    "scheduledTasks": {
+      "$userId": {
+        ".indexOn": ["scheduledDate", "status"]
+      }
+    },
+    
+    "stories": {
+      ".indexOn": ["companyId", "createdAt", "expiresAt"]
+    },
+    
+    "storyViews": {
+      "$storyId": {
+        ".indexOn": ["viewedAt"]
+      }
+    },
+    
+    "storyComments": {
+      "$storyId": {
+        ".indexOn": ["createdAt"]
+      }
+    }
+  }
+}

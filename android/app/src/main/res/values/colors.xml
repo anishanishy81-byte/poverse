@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand color for PO-VERSE -->
+    <color name="colorPrimary">#667eea</color>
+    <color name="colorPrimaryDark">#5a67d8</color>
+    <color name="colorAccent">#764ba2</color>
+    
+    <!-- Notification colors -->
+    <color name="colorNotification">#667eea</color>
+    
+    <!-- Status bar colors -->
+    <color name="colorStatusBar">#5a67d8</color>
+    
+    <!-- Background colors -->
+    <color name="colorBackground">#FFFFFF</color>
+    <color name="colorSurface">#F5F5F5</color>
+    
+    <!-- Text colors -->
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorOnBackground">#1A1A1A</color>
+    <color name="colorOnSurface">#1A1A1A</color>
+</resources>
